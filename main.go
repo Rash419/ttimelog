@@ -1,76 +1,82 @@
 package main
 
+// A simple example illustrating how to set a window title.
+
 import (
 	"fmt"
-	"net/http"
 	"os"
-	"time"
+	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type model struct {
-	status int
-	err    error
+	taskList  []string
+	textinput textinput.Model
+	err       error
 }
 
 type (
-	statusMsg int
-	errMsg    struct{ err error }
+	errMsg error
 )
 
-func (e errMsg) Error() string { return e.err.Error() }
+func initialModel() model {
+	textInput := textinput.New()
+	textInput.Focus()
+	textInput.Width = 25
 
-const url = "https://charm.sh/"
-
-func checkServer() tea.Msg {
-	c := &http.Client{Timeout: time.Second * 10}
-	res, err := c.Get(url)
-	if err != nil {
-		return errMsg{err}
+	return model{
+		taskList:  make([]string, 0),
+		textinput: textInput,
+		err:       nil,
 	}
-	return statusMsg(res.StatusCode)
 }
 
 func (m model) Init() tea.Cmd {
-	return checkServer
+	return textinput.Blink
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case statusMsg:
-		m.status = int(msg)
-		return m, tea.Quit
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+    case tea.KeyEnter:
+      task := strings.TrimSpace(m.textinput.Value())
+      m.taskList = append(m.taskList, task)
+      m.textinput.SetValue("")
+		}
 	case errMsg:
 		m.err = msg
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyCtrlC {
-			return m, tea.Quit
-		}
+		return m, nil
 	}
-	return m, nil
+
+	m.textinput, cmd = m.textinput.Update(msg)
+	return m, cmd
 }
 
 func (m model) View() string {
-	if m.err != nil {
-		return fmt.Sprintf("\nWe had trouble: %s\n\n", m.err)
-	}
-	// Tell the user we're doing something.
-	s := fmt.Sprintf("Checking %s ... ", url)
+	var view string
 
-	// When the server responds with a status, add it to the current line.
-	if m.status > 0 {
-		s += fmt.Sprintf("%d %s!", m.status, http.StatusText(m.status))
+	for _, task := range m.taskList {
+		view += fmt.Sprintf("%s - %s\n", "*", task)
 	}
 
-	// Send off whatever we came up with above for rendering.
-	return "\n" + s + "\n\n"
+	view += fmt.Sprintf(
+		"Arrival Message%s\n\n%s",
+		m.textinput.View(),
+		"(esc to quit)",
+	) + "\n"
+
+	return view
 }
 
 func main() {
-	p := tea.NewProgram(model{})
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Alas, there's been an error: %v", err)
+	if _, err := tea.NewProgram(initialModel(), tea.WithAltScreen()).Run(); err != nil {
+		fmt.Println("Uh oh:", err)
 		os.Exit(1)
 	}
 }
