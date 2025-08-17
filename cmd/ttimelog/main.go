@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
+	"github.com/Rash419/ttimelog/internal/config"
 	"github.com/Rash419/ttimelog/internal/layout"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -90,6 +92,19 @@ func (m model) View() string {
 }
 
 func main() {
+	slogger := config.GetSlogger()
+	slog.SetDefault(slogger)
+
+	userDir, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error("Failed to get user home directory", "error", err.Error())
+		os.Exit(1)
+	}
+	err = config.SetupTimeLogDirectory(userDir)
+	if err != nil {
+		slog.Error("Setup failed", "error", err.Error())
+		os.Exit(1)
+	}
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
