@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Rash419/ttimelog/internal/config"
-	"github.com/Rash419/ttimelog/internal/layout"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 )
 
 type model struct {
@@ -28,6 +28,7 @@ type (
 
 func initialModel() model {
 	txtInput := textinput.New()
+	txtInput.Placeholder = "What are you working on?"
 	txtInput.Focus()
 
 	return model{
@@ -51,6 +52,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.textInput.Width = m.width - 8
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -72,23 +74,101 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
-	border := layout.GetBorderStyle()
+func createHeaderContent() string {
+	timeNow := time.Now()
+	_, week := timeNow.ISOWeek()
+	dateAndDay := timeNow.Format("January, 02-01-2006")
+	return fmt.Sprintf("%s (Week %d)", dateAndDay, week)
+}
 
-	textinputBox := border.Width(m.width - 2).Render(
-		fmt.Sprintf("%v %s", time.Now().Format("15:04:05"), m.textInput.View()),
-	)
-	textInputHeight := lipgloss.Height(ansi.Strip(textinputBox))
+func createStatsContent(width int) string {
+	colWidth := (width - 4) / 3
 
-	listBoxHeight := max(m.height-textInputHeight, 1)
+	colStyle := lipgloss.NewStyle().Width(colWidth).Align(lipgloss.Left)
 
-	var listBoxData string
-	for _, item := range m.list {
-		listBoxData += fmt.Sprintf("* %s\n", item)
+	// TODO: mock data
+	dailyStat := colStyle.Render("TODAY  ████░░░ 1h6m \nLeft: 6h52m → 05:13")
+	weeklyStat := colStyle.Render("WEEK  █░░░░░░ 1h6m \nSlack: 0h0m")
+	monthlyStat := colStyle.Render("MONTH  1h6m/23d \nLast: 0h0m/22d")
+
+	divider := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).PaddingRight(1).
+		Render(strings.TrimRight(strings.Repeat("│\n", 2), "\n"))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, dailyStat, divider, weeklyStat, divider, monthlyStat)
+}
+
+func createFooterContent(m model) string {
+	return fmt.Sprintf("%v %s", time.Now().Format("15:04"), m.textInput.View())
+}
+
+func createBodyContent(width int, height int) string {
+	tableHeaders := []string{"Duration", "Time Range", "Task"}
+
+	durationColWidth := max(lipgloss.Width("00h 00m"), lipgloss.Width(tableHeaders[0]))
+	timeRangeColWidth := max(lipgloss.Width("00:00 - 00:00"), lipgloss.Width(tableHeaders[1]))
+	taskColWidth := width - durationColWidth - timeRangeColWidth - len(tableHeaders)*2 // adjust width according to default padding added by the table component
+
+	columns := []table.Column{
+		{Title: tableHeaders[0], Width: durationColWidth},
+		{Title: tableHeaders[1], Width: timeRangeColWidth},
+		{Title: tableHeaders[2], Width: taskColWidth},
 	}
-	listBox := border.Width(m.width - 2).Height(listBoxHeight - 2).Render(listBoxData)
 
-	return lipgloss.JoinVertical(lipgloss.Left, listBox, textinputBox)
+	// TODO: mock data
+	rows := []table.Row{
+		{"0h 0m", "21:13 - 21:13", "**arrived"},
+		{"1h 2m", "21:35 - 21:37", "productivity: r&d-productivity: product: collabora-online-25-04: working on online"},
+		{"2h 44m", "21:37 - 22:19", "working"},
+	}
+
+	taskTable := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(height),
+	)
+
+	return taskTable.View()
+}
+
+func (m model) View() string {
+	// make sure width is not negative
+	// model.width/height - 2 (border width)
+	availableWidth := max(m.width-2, 1)
+	availableHeight := max(m.height-2, 1)
+
+	headerContent := createHeaderContent()
+	statsContent := createStatsContent(availableWidth)
+	footerContent := createFooterContent(m)
+
+	headerHeight := lipgloss.Height(headerContent)
+	statsHeight := lipgloss.Height(statsContent)
+	footerHeight := lipgloss.Height(footerContent)
+
+	const numOfDividers = 3
+	divider := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render(strings.Repeat("─", availableWidth))
+
+	totalDividerHeight := numOfDividers * lipgloss.Height(divider)
+	bodyHeigth := availableHeight - headerHeight - statsHeight - footerHeight - totalDividerHeight
+
+	bodyContent := createBodyContent(availableWidth, bodyHeigth)
+
+	innerView := lipgloss.JoinVertical(lipgloss.Left,
+		headerContent,
+		divider,
+		statsContent,
+		divider,
+		bodyContent,
+		divider,
+		footerContent,
+	)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		Render(innerView)
 }
 
 func main() {
