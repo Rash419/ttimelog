@@ -77,7 +77,7 @@ func parseEntry(line string, previousEntry *Entry) (*Entry, error) {
 
 	return &Entry{
 		EndTime:     endTime,
-		Description: tokens[2],
+		Description: strings.Trim(tokens[2], " "),
 		Duration:    entryDuration,
 	}, nil
 }

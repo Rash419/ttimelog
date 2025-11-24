@@ -133,8 +133,8 @@ func getTableHeaders() []string {
 func createBodyContent(width int, height int, entries []timelog.Entry) string {
 	tableHeaders := getTableHeaders()
 
-	durationColWidth := max(lipgloss.Width("0 h 00 min"), lipgloss.Width(tableHeaders[0]))
-	timeRangeColWidth := max(lipgloss.Width("00:00 - 00:00"), lipgloss.Width(tableHeaders[1]))
+	durationColWidth := lipgloss.Width("0 h 00 min")
+	timeRangeColWidth := lipgloss.Width("00:00 - 00:00")
 	taskColWidth := width - durationColWidth - timeRangeColWidth - len(tableHeaders)*2 // adjust width according to default padding added by the table component
 
 	columns := []table.Column{
