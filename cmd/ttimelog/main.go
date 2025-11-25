@@ -48,6 +48,7 @@ func initialModel() model {
 		slog.Error("Failed to load entries", "error", err)
 	}
 
+	// TODO: maybe not the best to use "0" width values
 	taskTable := createBodyContent(0, 0, entries)
 
 	return model{
@@ -80,7 +81,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textInput.Width = availableWidth - prefixSpace - 2 // -2 for safety
 
 		// Update table dimensions
-		newCols := getTableCols(msg.Width)
+		newCols := getTableCols(availableWidth)
 		m.taskTable.SetColumns(newCols)
 		fixedHeight := HeaderHeight + StatsHeight + FooterHeight + (DividerHeight * NumDividers) + BorderHeight
 		bodyHeight := msg.Height - fixedHeight
@@ -109,6 +110,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err := timelog.SaveEntry(newEntry); err != nil {
 					slog.Error("Failed to add entry with description", "error", newEntry.Description)
 				}
+
+				rows := getTableRows(m.entries)
+				m.taskTable.SetRows(rows)
 				m.textInput.Reset()
 			}
 		case tea.KeyEsc:
@@ -218,14 +222,6 @@ func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
 		table.WithFocused(true),
 		table.WithHeight(height),
 	)
-	s := table.DefaultStyles()
-
-	// s := table.DefaultStyles()
-	// s.Cell = s.Cell.Padding(0)
-	// s.Header = s.Header.Padding(0)
-	// // s.Header.Padding(0)
-	// // s.Selected.Padding(0)
-	// taskTable.SetStyles(s)
 	return taskTable
 }
 
