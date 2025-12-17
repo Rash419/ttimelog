@@ -16,12 +16,13 @@ import (
 )
 
 type model struct {
-	textInput textinput.Model
-	taskTable table.Model
-	err       error
-	width     int
-	height    int
-	entries   []timelog.Entry
+	textInput       textinput.Model
+	taskTable       table.Model
+	err             error
+	width           int
+	height          int
+	entries         []timelog.Entry
+	statsCollection timelog.StatsCollection
 }
 
 const (
@@ -43,7 +44,7 @@ func initialModel() model {
 	txtInput.Focus()
 
 	filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-	entries, err := timelog.LoadEntries(filename)
+	entries, statsCollections, err := timelog.LoadEntries(filename)
 	if err != nil {
 		slog.Error("Failed to load entries", "error", err)
 	}
@@ -52,10 +53,11 @@ func initialModel() model {
 	taskTable := createBodyContent(0, 0, entries)
 
 	return model{
-		textInput: txtInput,
-		err:       nil,
-		entries:   entries,
-		taskTable: taskTable,
+		textInput:       txtInput,
+		err:             nil,
+		entries:         entries,
+		taskTable:       taskTable,
+		statsCollection: statsCollections,
 	}
 }
 
@@ -100,19 +102,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					lastTaskTime = m.entries[len(m.entries)-1].EndTime
 				}
 
+				// update table
 				newEntry := timelog.Entry{
 					EndTime:     time.Now(),
 					Description: val,
 					Duration:    time.Since(lastTaskTime),
 				}
-				m.entries = append(m.entries, newEntry)
 
+				m.entries = append(m.entries, newEntry)
 				if err := timelog.SaveEntry(newEntry); err != nil {
 					slog.Error("Failed to add entry with description", "error", newEntry.Description)
 				}
 
 				rows := getTableRows(m.entries)
 				m.taskTable.SetRows(rows)
+
+				// update statsCollection
+				today, week, month := timelog.GetEntryState(newEntry.EndTime)
+				if today {
+					m.statsCollection.Daily.Work += newEntry.Duration
+				}
+				if week {
+					m.statsCollection.Weekly.Work += newEntry.Duration
+				}
+				if month {
+					m.statsCollection.Monthly.Work += newEntry.Duration
+				}
+
+				// reset textInput
 				m.textInput.Reset()
 			}
 		case tea.KeyEsc:
@@ -144,15 +161,14 @@ func createHeaderContent() string {
 	return fmt.Sprintf("%s (Week %d)", dateAndDay, week)
 }
 
-func createStatsContent(width int) string {
+func createStatsContent(width int, m model) string {
 	colWidth := (width - 4) / 3
 
 	colStyle := lipgloss.NewStyle().Width(colWidth).Align(lipgloss.Left)
 
-	// TODO: mock data
-	dailyStat := colStyle.Render("TODAY  ████░░░ 1h6m \nLeft: 6h52m → 05:13")
-	weeklyStat := colStyle.Render("WEEK  █░░░░░░ 1h6m \nSlack: 0h0m")
-	monthlyStat := colStyle.Render("MONTH  1h6m/23d \nLast: 0h0m/22d")
+	dailyStat := colStyle.Render("TODAY  ████░░░ " + timelog.FormatStatDuration(m.statsCollection.Daily.Work) + "\nLeft: 6h52m → 05:13")
+	weeklyStat := colStyle.Render("WEEK  █░░░░░░ " + timelog.FormatStatDuration(m.statsCollection.Weekly.Work) + "\nSlack: 0h0m")
+	monthlyStat := colStyle.Render("MONTH " + timelog.FormatStatDuration(m.statsCollection.Monthly.Work) + "\nLast: 0h0m/22d")
 
 	divider := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).PaddingRight(1).
@@ -173,7 +189,7 @@ func getTableHeaders() []string {
 func getTableCols(width int) []table.Column {
 	tableHeaders := getTableHeaders()
 
-	durationColWidth := lipgloss.Width("0 h 00 min")
+	durationColWidth := lipgloss.Width("00 h 00 min")
 	timeRangeColWidth := lipgloss.Width("00:00 - 00:00")
 	// adjust width according to default padding added by the table component
 	taskColWidth := max(0, width-durationColWidth-timeRangeColWidth-len(tableHeaders)*2)
@@ -227,27 +243,15 @@ func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
 
 func (m model) View() string {
 	// make sure width is not negative
-	// model.width/height - 2 (border width)
 	availableWidth := max(m.width-2, 1)
-	// availableHeight := max(m.height-2, 1)
 
 	headerContent := createHeaderContent()
-	statsContent := createStatsContent(availableWidth)
+	statsContent := createStatsContent(availableWidth, m)
 	footerContent := createFooterContent(m)
 
-	// headerHeight := lipgloss.Height(headerContent)
-	// statsHeight := lipgloss.Height(statsContent)
-	// footerHeight := lipgloss.Height(footerContent)
-	//
-	// const numOfDividers = 3
 	divider := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
 		Render(strings.Repeat("─", availableWidth))
-
-	// totalDividerHeight := numOfDividers * lipgloss.Height(divider)
-	// bodyHeigth := availableHeight - headerHeight - statsHeight - footerHeight - totalDividerHeight
-
-	// bodyContent := createBodyContent(availableWidth, bodyHeigth, m)
 
 	innerView := lipgloss.JoinVertical(lipgloss.Left,
 		headerContent,

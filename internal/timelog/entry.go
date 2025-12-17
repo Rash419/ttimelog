@@ -14,9 +14,26 @@ type Entry struct {
 	Description string
 	// Duration is computed on load, not stored
 	Duration time.Duration
+
+	Today        bool
+	CurrentWeek  bool
+	CurrentMonth bool
+}
+
+type StatsCollection struct {
+	Daily   Stats
+	Weekly  Stats
+	Monthly Stats
+}
+
+type Stats struct {
+	Work  time.Duration
+	Slack time.Duration
 }
 
 const timeLayout = "2006-01-02 15:04 -0700"
+
+// TODO: Add test for SaveEntry
 
 // SaveEntry saves the entry in 'YYYY-MM-DD HH:MM +/-0000: Task Description' format
 func SaveEntry(entry Entry) error {
@@ -46,7 +63,34 @@ func SaveEntry(entry Entry) error {
 	return nil
 }
 
-// 2025-10-17 13:30 +0530: Workin on ttimelog
+func GetEntryState(t time.Time) (bool, bool, bool) {
+	now := time.Now()
+	y1, m1, d1 := t.Date()
+	y2, m2, d2 := now.Date()
+
+	_, w1 := t.ISOWeek()
+	_, w2 := now.ISOWeek()
+
+	var today, currentWeek, currentMonth bool
+	if y1 != y2 {
+		return false, false, false
+	}
+
+	if w1 == w2 {
+		currentWeek = true
+	}
+
+	if m1 == m2 {
+		currentMonth = true
+		if d1 == d2 {
+			today = true
+		}
+	}
+
+	return today, currentWeek, currentMonth
+}
+
+// 2025-10-17 13:30 +0530: Working on ttimelog
 func parseEntry(line string, previousEntry *Entry) (*Entry, error) {
 	// It splits in 3 strings and we merge them later
 	tokens := strings.Split(line, ":")
@@ -75,22 +119,33 @@ func parseEntry(line string, previousEntry *Entry) (*Entry, error) {
 		}
 	}
 
+	today, currentWeek, currentMonth := GetEntryState(endTime)
 	return &Entry{
-		EndTime:     endTime,
-		Description: strings.Trim(tokens[2], " "),
-		Duration:    entryDuration,
+		EndTime:      endTime,
+		Description:  strings.Trim(tokens[2], " "),
+		Duration:     entryDuration,
+		Today:        today,
+		CurrentWeek:  currentWeek,
+		CurrentMonth: currentMonth,
 	}, nil
 }
 
-func LoadEntries(filePath string) ([]Entry, error) {
+func LoadEntries(filePath string) ([]Entry, StatsCollection, error) {
+	statsCollection := StatsCollection{
+		Daily: Stats{},
+		Weekly: Stats{},
+		Monthly: Stats{},
+	}
+
 	entries := make([]Entry, 0)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return entries, err
+		return entries, statsCollection, err
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
@@ -107,18 +162,25 @@ func LoadEntries(filePath string) ([]Entry, error) {
 			entry, err = parseEntry(line, &entries[len(entries)-1])
 		}
 		if err != nil {
-			return entries, err
+			return entries, statsCollection, err
 		}
 
-		if entry != nil {
-			entries = append(entries, *entry)
+		if entry.Today {
+			statsCollection.Daily.Work += entry.Duration
 		}
+		if entry.CurrentWeek {
+			statsCollection.Weekly.Work += entry.Duration
+		}
+		if entry.CurrentMonth {
+			statsCollection.Monthly.Work += entry.Duration
+		}
+		entries = append(entries, *entry)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return entries, err
+		return entries, statsCollection, err
 	}
-	return entries, nil
+	return entries, statsCollection, nil
 }
 
 // FormatDuration formats a time.Duration into "__h __m" format.
@@ -129,4 +191,13 @@ func FormatDuration(diff time.Duration) string {
 	diff -= hours * time.Hour
 	mins := diff / time.Minute
 	return fmt.Sprintf("%d h %d min", hours, mins)
+}
+
+func FormatStatDuration(diff time.Duration) string {
+	diff = diff.Truncate(time.Minute)
+
+	hours := diff / time.Hour
+	diff -= hours * time.Hour
+	mins := diff / time.Minute
+	return fmt.Sprintf("%dh%dm", hours, mins)
 }

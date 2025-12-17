@@ -17,6 +17,37 @@ func TestTimeLog(t *testing.T) {
 	assert.Equal(t, "2 h 1 min", timeDiff)
 }
 
+func TestEntryState(t *testing.T) {
+	today, currentWeek, currentMonth := GetEntryState(time.Now())
+	assert.Equal(t, true, today)
+	assert.Equal(t, true, currentWeek)
+	assert.Equal(t, true, currentMonth)
+
+	nextDay := time.Now().AddDate(0, 0, 1)
+	today, currentWeek, currentMonth = GetEntryState(nextDay)
+	assert.Equal(t, false, today)
+	assert.Equal(t, true, currentWeek)
+	assert.Equal(t, true, currentMonth)
+
+	nextWeek := time.Now().AddDate(0, 0, 7)
+	today, currentWeek, currentMonth = GetEntryState(nextWeek)
+	assert.Equal(t, false, today)
+	assert.Equal(t, false, currentWeek)
+	assert.Equal(t, true, currentMonth)
+
+	nextMonth := time.Now().AddDate(0, 1, 0)
+	today, currentWeek, currentMonth = GetEntryState(nextMonth)
+	assert.Equal(t, false, today)
+	assert.Equal(t, false, currentWeek)
+	assert.Equal(t, false, currentMonth)
+
+	nextYear := time.Now().AddDate(1, 0, 0)
+	today, currentWeek, currentMonth = GetEntryState(nextYear)
+	assert.Equal(t, false, today)
+	assert.Equal(t, false, currentWeek)
+	assert.Equal(t, false, currentMonth)
+}
+
 func TestLoadEntries(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile, err := os.CreateTemp(tmpDir, "ttimelog.txt")
@@ -46,7 +77,7 @@ func TestLoadEntries(t *testing.T) {
 	tmpFilename := tmpFile.Name()
 	tmpFile.Close()
 
-	entries, err := LoadEntries(tmpFilename)
+	entries, _, err := LoadEntries(tmpFilename)
 
 	assert.NoError(t, err)
 	assert.Len(t, entries, 4)
