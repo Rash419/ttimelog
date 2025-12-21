@@ -102,43 +102,36 @@ func GetEntryState(t time.Time) (bool, bool, bool) {
 }
 
 // 2025-10-17 13:30 +0530: Working on ttimelog
-func parseEntry(line string, previousEntry *Entry) (*Entry, error) {
+func parseEntry(line string, firstEntry bool, previousEntry Entry) (Entry, error) {
 	// It splits in 3 strings and we merge them later
 	tokens := strings.Split(line, ":")
 	if len(tokens) < 3 {
-		return nil, errors.New("invalid format")
+		return Entry{}, errors.New("invalid format")
 	}
 
 	dateAndTime := tokens[0] + ":" + tokens[1]
 	dateAndTimeTokens := strings.Split(dateAndTime, " ")
 	if len(dateAndTimeTokens) < 3 {
-		return nil, errors.New("invalid format")
+		return Entry{}, errors.New("invalid format")
 	}
 
 	parsedDate := dateAndTimeTokens[0]
 
 	endTime, err := time.Parse(timeLayout, dateAndTime)
 	if err != nil {
-		return nil, err
+		return Entry{}, err
 	}
 
 	entryDuration := time.Duration(0)
-	if previousEntry != nil {
+	if !firstEntry {
 		prevDate := previousEntry.EndTime.Format("2006-01-02")
 		if parsedDate == prevDate {
 			entryDuration = endTime.Sub(previousEntry.EndTime)
 		}
 	}
 
-	today, currentWeek, currentMonth := GetEntryState(endTime)
-	return &Entry{
-		EndTime:      endTime,
-		Description:  strings.Trim(tokens[2], " "),
-		Duration:     entryDuration,
-		Today:        today,
-		CurrentWeek:  currentWeek,
-		CurrentMonth: currentMonth,
-	}, nil
+	entry := NewEntry(endTime, strings.Trim(tokens[2], " "), entryDuration)
+	return entry, nil
 }
 
 func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
@@ -163,14 +156,14 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 			continue
 		}
 		var (
-			entry *Entry
+			entry Entry
 			err   error
 		)
 		line = strings.Trim(line, " ")
 		if len(entries) == 0 {
-			entry, err = parseEntry(line, nil)
+			entry, err = parseEntry(line, true, Entry{})
 		} else {
-			entry, err = parseEntry(line, &entries[len(entries)-1])
+			entry, err = parseEntry(line, false, entries[len(entries)-1])
 		}
 
 		if err != nil {
@@ -182,7 +175,7 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 		}
 
 		UpdateStatsCollection(entry, &statsCollection)
-		entries = append(entries, *entry)
+		entries = append(entries, entry)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -191,7 +184,7 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 	return entries, statsCollection, handledArrivedMessage, nil
 }
 
-func UpdateStatsCollection(entry *Entry, statsCollection *StatsCollection) {
+func UpdateStatsCollection(entry Entry, statsCollection *StatsCollection) {
 	if strings.Contains(entry.Description, "**") {
 		return
 	}

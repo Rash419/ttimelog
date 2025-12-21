@@ -77,7 +77,7 @@ func TestLoadEntries(t *testing.T) {
 	tmpFilename := tmpFile.Name()
 	tmpFile.Close()
 
-	entries, _, err := LoadEntries(tmpFilename)
+	entries, _, _, err := LoadEntries(tmpFilename)
 
 	assert.NoError(t, err)
 	assert.Len(t, entries, 4)

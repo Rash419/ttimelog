@@ -105,7 +105,7 @@ func (m *model) handleInput() {
 	m.taskTable.SetRows(rows)
 	m.scrollToBottom = true
 
-	timelog.UpdateStatsCollection(&newEntry, &m.statsCollection)
+	timelog.UpdateStatsCollection(newEntry, &m.statsCollection)
 
 	m.textInput.Reset()
 }
