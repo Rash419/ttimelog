@@ -132,8 +132,8 @@ func parseEntry(line string, previousEntry *Entry) (*Entry, error) {
 
 func LoadEntries(filePath string) ([]Entry, StatsCollection, error) {
 	statsCollection := StatsCollection{
-		Daily: Stats{},
-		Weekly: Stats{},
+		Daily:   Stats{},
+		Weekly:  Stats{},
 		Monthly: Stats{},
 	}
 
@@ -165,14 +165,16 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, error) {
 			return entries, statsCollection, err
 		}
 
-		if entry.Today {
-			statsCollection.Daily.Work += entry.Duration
-		}
-		if entry.CurrentWeek {
-			statsCollection.Weekly.Work += entry.Duration
-		}
-		if entry.CurrentMonth {
-			statsCollection.Monthly.Work += entry.Duration
+		if !strings.Contains(entry.Description, "**") {
+			if entry.Today {
+				statsCollection.Daily.Work += entry.Duration
+			}
+			if entry.CurrentWeek {
+				statsCollection.Weekly.Work += entry.Duration
+			}
+			if entry.CurrentMonth {
+				statsCollection.Monthly.Work += entry.Duration
+			}
 		}
 		entries = append(entries, *entry)
 	}

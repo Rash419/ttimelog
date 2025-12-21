@@ -128,15 +128,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scrollToBottom = true
 
 				// update statsCollection
-				today, week, month := timelog.GetEntryState(newEntry.EndTime)
-				if today {
-					m.statsCollection.Daily.Work += newEntry.Duration
-				}
-				if week {
-					m.statsCollection.Weekly.Work += newEntry.Duration
-				}
-				if month {
-					m.statsCollection.Monthly.Work += newEntry.Duration
+				if !strings.Contains(newEntry.Description, "**") {
+					today, week, month := timelog.GetEntryState(newEntry.EndTime)
+					if today {
+						m.statsCollection.Daily.Work += newEntry.Duration
+					}
+					if week {
+						m.statsCollection.Weekly.Work += newEntry.Duration
+					}
+					if month {
+						m.statsCollection.Monthly.Work += newEntry.Duration
+					}
 				}
 
 				// reset textInput
