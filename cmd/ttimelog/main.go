@@ -86,7 +86,8 @@ func (m *model) handleInput() {
 	}
 
 	var lastTaskTime time.Time
-	if len(m.entries) == 0 || (timelog.IsArrivedMessage(val) && !m.handledArrivedMessage) {
+	handleArrivedMessage := timelog.IsArrivedMessage(val) && !m.handledArrivedMessage
+	if len(m.entries) == 0 || handleArrivedMessage {
 		lastTaskTime = time.Now()
 		m.handledArrivedMessage = true
 	} else {
@@ -97,7 +98,7 @@ func (m *model) handleInput() {
 	newEntry := timelog.NewEntry(time.Now(), val, time.Since(lastTaskTime))
 
 	m.entries = append(m.entries, newEntry)
-	if err := timelog.SaveEntry(newEntry); err != nil {
+	if err := timelog.SaveEntry(newEntry, handleArrivedMessage); err != nil {
 		slog.Error("Failed to add entry with description", "error", newEntry.Description)
 	}
 

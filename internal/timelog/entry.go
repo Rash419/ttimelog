@@ -47,7 +47,7 @@ func NewEntry(endTime time.Time, description string, duration time.Duration) Ent
 
 // TODO: Add test for SaveEntry
 // SaveEntry saves the entry in 'YYYY-MM-DD HH:MM +/-0000: Task Description' format
-func SaveEntry(entry Entry) error {
+func SaveEntry(entry Entry, addNewLine bool) error {
 	// TODO: make it dynamic
 	// we already create the file if didn't exist in config.go when we create
 	// we can save the path of the file in config struct or make a global variable.
@@ -65,7 +65,12 @@ func SaveEntry(entry Entry) error {
 	defer f.Close()
 
 	dateAndTime := entry.EndTime.Format(timeLayout)
-	textEntry := fmt.Sprintf("%s: %s\n", dateAndTime, entry.Description)
+
+	saveFormat := "%s: %s\n"
+	if addNewLine {
+		saveFormat = "\n" + saveFormat
+	}
+	textEntry := fmt.Sprintf(saveFormat, dateAndTime, entry.Description)
 
 	if _, err := f.WriteString(textEntry); err != nil {
 		return err
