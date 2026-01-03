@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -53,18 +55,7 @@ type (
 	errMsg error
 )
 
-func initialModel() model {
-	ctx, cancel := context.WithCancel(context.Background())
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		err := fileWatcher(ctx, wg)
-		if err != nil {
-			slog.Error("Failed to start filewatcher", "error", err)
-		}
-	}()
-
+func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) model {
 	txtInput := textinput.New()
 	txtInput.Placeholder = "What are you working on?"
 	txtInput.Focus()
@@ -174,6 +165,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.handleWindowSize(msg)
+	case fileChangedMsg:
+		filename := "/home/rashesh/.ttimelog/ttimelog.txt"
+		entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(filename)
+		if err != nil {
+			slog.Error("Failed to load entries on reload", "error", err)
+		} else {
+			m.entries = entries
+			m.statsCollection = statsCollections
+			m.handledArrivedMessage = handledArrivedMessage
+
+			rows := getTableRows(m.entries)
+			m.taskTable.SetRows(rows)
+			m.scrollToBottom = true
+		}
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
@@ -330,8 +336,14 @@ func (m model) View() string {
 		Render(innerView)
 }
 
+type fileChangedMsg struct{}
+
+type fileErrorMsg struct {
+	err error
+}
+
 // watch modification in ".ttimelog.txt"
-func fileWatcher(ctx context.Context, wg *sync.WaitGroup) error {
+func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program) error {
 	defer wg.Done()
 
 	watcher, err := fsnotify.NewWatcher()
@@ -345,35 +357,51 @@ func fileWatcher(ctx context.Context, wg *sync.WaitGroup) error {
 		}
 	}()
 
+	// TODO: make it dynamic
 	filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-	err = watcher.Add(filename)
+	err = watcher.Add(filepath.Dir(filename))
 	if err != nil {
 		return err
 	}
+
 	for {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return nil
 			}
-			fmt.Println("event:", event)
-			if event.Has(fsnotify.Write) {
-				fmt.Println("modified file:", event.Name)
+			if event.Op&(fsnotify.Write|
+				fsnotify.Create|
+				fsnotify.Rename) != 0 && filepath.Base(event.Name) == "ttimelog.txt" {
+				program.Send(fileChangedMsg{})
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return nil
 			}
-			fmt.Println("error:", err)
+			program.Send(fileErrorMsg{
+				err: err,
+			})
 		case <-ctx.Done():
-			fmt.Println("exiting")
 			return nil
 		}
 	}
 }
 
 func main() {
-	slogger := config.GetSlogger()
+	// TODO: save log file to ~/.ttimelog
+	logFile, err := os.OpenFile(
+		"app.log",
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0o644,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create logFile with error[%v]", err.Error())
+	}
+
+	defer logFile.Close()
+
+	slogger := config.GetSlogger(logFile)
 	slog.SetDefault(slogger)
 
 	userDir, err := os.UserHomeDir()
@@ -387,7 +415,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+
+	p := tea.NewProgram(initialModel(ctx, cancel, wg), tea.WithAltScreen())
+
+	wg.Add(1)
+	go func() {
+		err := fileWatcher(ctx, wg, p)
+		if err != nil {
+			slog.Error("Failed to start filewatcher", "error", err)
+		}
+	}()
+
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

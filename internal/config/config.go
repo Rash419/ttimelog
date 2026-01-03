@@ -14,12 +14,12 @@ const (
 	timeLogFilename = "ttimelog.txt"
 )
 
-func GetSlogger() *slog.Logger {
+func GetSlogger(logFile *os.File) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}
 
-	handler := slog.NewTextHandler(os.Stdout, opts)
+	handler := slog.NewTextHandler(logFile, opts)
 	return slog.New(handler)
 }
 
