@@ -161,26 +161,29 @@ func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
 
 type shutdownCompleteMsg struct{}
 
+func (m model) handleFileChangedMsg() {
+	entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(m.timeLogFilePath)
+	if err != nil {
+		slog.Error("Failed to load entries on reload", "error", err)
+		return
+	}
+	m.entries = entries
+	m.statsCollection = statsCollections
+	m.handledArrivedMessage = handledArrivedMessage
+
+	rows := getTableRows(m.entries)
+	m.taskTable.SetRows(rows)
+	m.scrollToBottom = true
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.handleWindowSize(msg)
 	case fileChangedMsg:
-		entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(m.timeLogFilePath)
-		if err != nil {
-			slog.Error("Failed to load entries on reload", "error", err)
-		} else {
-			m.entries = entries
-			m.statsCollection = statsCollections
-			m.handledArrivedMessage = handledArrivedMessage
-
-			rows := getTableRows(m.entries)
-			m.taskTable.SetRows(rows)
-			m.scrollToBottom = true
-		}
+		m.handleFileChangedMsg()
 	case fileErrorMsg:
 	// TODO: handle file watch error
-
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
