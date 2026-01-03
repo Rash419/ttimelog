@@ -34,6 +34,7 @@ type model struct {
 	ctx                   context.Context
 	cancel                context.CancelFunc
 	wg                    *sync.WaitGroup
+	timeLogFilePath       string
 }
 
 const (
@@ -55,18 +56,16 @@ type (
 	errMsg error
 )
 
-func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) model {
+func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, timeLogFilePath string) model {
 	txtInput := textinput.New()
 	txtInput.Placeholder = "What are you working on?"
 	txtInput.Focus()
 
-	filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-	entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(filename)
+	entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(timeLogFilePath)
 	if err != nil {
 		slog.Error("Failed to load entries", "error", err)
 	}
 
-	// TODO: maybe not the best to use "0" width values
 	taskTable := createBodyContent(0, 0, entries)
 
 	return model{
@@ -80,6 +79,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		ctx:                   ctx,
 		cancel:                cancel,
 		wg:                    wg,
+		timeLogFilePath:       timeLogFilePath,
 	}
 }
 
@@ -109,7 +109,7 @@ func (m *model) handleInput() {
 	newEntry := timelog.NewEntry(time.Now(), val, time.Since(lastTaskTime))
 
 	m.entries = append(m.entries, newEntry)
-	if err := timelog.SaveEntry(newEntry, handleArrivedMessage); err != nil {
+	if err := timelog.SaveEntry(newEntry, handleArrivedMessage, m.timeLogFilePath); err != nil {
 		slog.Error("Failed to add entry with description", "error", newEntry.Description)
 	}
 
@@ -166,8 +166,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.handleWindowSize(msg)
 	case fileChangedMsg:
-		filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-		entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(filename)
+		entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(m.timeLogFilePath)
 		if err != nil {
 			slog.Error("Failed to load entries on reload", "error", err)
 		} else {
@@ -179,6 +178,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.taskTable.SetRows(rows)
 			m.scrollToBottom = true
 		}
+	case fileErrorMsg:
+	// TODO: handle file watch error
 
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -343,7 +344,7 @@ type fileErrorMsg struct {
 }
 
 // watch modification in ".ttimelog.txt"
-func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program) error {
+func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program, timeLogFilePath string) error {
 	defer wg.Done()
 
 	watcher, err := fsnotify.NewWatcher()
@@ -357,9 +358,7 @@ func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program) 
 		}
 	}()
 
-	// TODO: make it dynamic
-	filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-	err = watcher.Add(filepath.Dir(filename))
+	err = watcher.Add(filepath.Dir(timeLogFilePath))
 	if err != nil {
 		return err
 	}
@@ -409,7 +408,8 @@ func main() {
 		slog.Error("Failed to get user home directory", "error", err.Error())
 		os.Exit(1)
 	}
-	err = config.SetupTimeLogDirectory(userDir)
+
+	timeLogFilePath, err := config.SetupTimeLogDirectory(userDir)
 	if err != nil {
 		slog.Error("Setting up timelog file", "error", err.Error())
 		os.Exit(1)
@@ -418,11 +418,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	p := tea.NewProgram(initialModel(ctx, cancel, wg), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(ctx, cancel, wg, timeLogFilePath), tea.WithAltScreen())
 
 	wg.Add(1)
 	go func() {
-		err := fileWatcher(ctx, wg, p)
+		err := fileWatcher(ctx, wg, p, timeLogFilePath)
 		if err != nil {
 			slog.Error("Failed to start filewatcher", "error", err)
 		}

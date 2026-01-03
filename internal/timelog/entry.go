@@ -48,18 +48,12 @@ func NewEntry(endTime time.Time, description string, duration time.Duration) Ent
 
 // TODO: Add test for SaveEntry
 // SaveEntry saves the entry in 'YYYY-MM-DD HH:MM +/-0000: Task Description' format
-func SaveEntry(entry Entry, addNewLine bool) error {
-	// TODO: make it dynamic
-	// we already create the file if didn't exist in config.go when we create
-	// we can save the path of the file in config struct or make a global variable.
-	// I am not sure.
-	filename := "/home/rashesh/.ttimelog/ttimelog.txt"
-
+func SaveEntry(entry Entry, addNewLine bool, timeLogFilePath string) error {
 	// Open the file in append mode. Create it if it doesn't exist.
 	// os.O_APPEND: Open the file for appending.
 	// os.O_WRONLY: Open the file for writing only.
 	// 0644: File permissions (read/write for owner, read-only for others).
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(timeLogFilePath, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}

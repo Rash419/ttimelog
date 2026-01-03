@@ -23,11 +23,11 @@ func GetSlogger(logFile *os.File) *slog.Logger {
 	return slog.New(handler)
 }
 
-func SetupTimeLogDirectory(userDir string) error {
+func SetupTimeLogDirectory(userDir string) (string, error){
 	fullDirPath := filepath.Join(userDir, timeLogDirname)
 	err := os.MkdirAll(fullDirPath, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create directory[%s] with error[%v]", fullDirPath, err)
+		return "", fmt.Errorf("failed to create directory[%s] with error[%v]", fullDirPath, err)
 	}
 
 	timeLogFilePath := filepath.Join(fullDirPath, timeLogFilename)
@@ -36,13 +36,13 @@ func SetupTimeLogDirectory(userDir string) error {
 	if errors.Is(err, os.ErrNotExist) {
 		timeLogFile, err := os.Create(timeLogFilePath)
 		if err != nil {
-			return fmt.Errorf("failed to create timeLogFile[%s] with error[%v]", timeLogFilePath, err)
+			return "", fmt.Errorf("failed to create timeLogFile[%s] with error[%v]", timeLogFilePath, err)
 		}
 		defer timeLogFile.Close()
 		slog.Info("Successfully created", "file", timeLogFilePath)
 	} else if err != nil {
-		return fmt.Errorf("failed to open timeLogFile[%s] with error[%v]", timeLogFilePath, err)
+		return "", fmt.Errorf("failed to open timeLogFile[%s] with error[%v]", timeLogFilePath, err)
 	}
 
-	return nil
+	return timeLogFilePath, nil
 }
