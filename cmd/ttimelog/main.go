@@ -347,6 +347,7 @@ type fileErrorMsg struct {
 func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program, timeLogFilePath string) error {
 	defer wg.Done()
 
+	slog.Debug("Starting filewatcher on", "filePath", timeLogFilePath)
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -371,7 +372,7 @@ func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program, 
 			}
 			if event.Op&(fsnotify.Write|
 				fsnotify.Create|
-				fsnotify.Rename) != 0 && filepath.Base(event.Name) == "ttimelog.txt" {
+				fsnotify.Rename) != 0 && filepath.Base(event.Name) == config.TimeLogFilename {
 				program.Send(fileChangedMsg{})
 			}
 		case err, ok := <-watcher.Errors:
@@ -389,8 +390,15 @@ func fileWatcher(ctx context.Context, wg *sync.WaitGroup, program *tea.Program, 
 
 func main() {
 	// TODO: save log file to ~/.ttimelog
+	userDir, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error("Failed to get user home directory", "error", err.Error())
+		os.Exit(1)
+	}
+
+	logFilePath := filepath.Join(userDir, config.TimeLogDirname, "ttimelog.log")
 	logFile, err := os.OpenFile(
-		"app.log",
+		logFilePath,
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
 		0o644,
 	)
@@ -402,12 +410,6 @@ func main() {
 
 	slogger := config.GetSlogger(logFile)
 	slog.SetDefault(slogger)
-
-	userDir, err := os.UserHomeDir()
-	if err != nil {
-		slog.Error("Failed to get user home directory", "error", err.Error())
-		os.Exit(1)
-	}
 
 	timeLogFilePath, err := config.SetupTimeLogDirectory(userDir)
 	if err != nil {

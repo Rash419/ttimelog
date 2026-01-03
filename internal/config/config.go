@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	timeLogDirname  = ".ttimelog"
-	timeLogFilename = "ttimelog.txt"
+	TimeLogDirname  = ".ttimelog"
+	TimeLogFilename = "ttimelog.txt"
+	TimeLogFile = "ttimelog.log"
 )
 
 func GetSlogger(logFile *os.File) *slog.Logger {
@@ -24,13 +25,13 @@ func GetSlogger(logFile *os.File) *slog.Logger {
 }
 
 func SetupTimeLogDirectory(userDir string) (string, error){
-	fullDirPath := filepath.Join(userDir, timeLogDirname)
+	fullDirPath := filepath.Join(userDir, TimeLogDirname)
 	err := os.MkdirAll(fullDirPath, 0755)
 	if err != nil {
 		return "", fmt.Errorf("failed to create directory[%s] with error[%v]", fullDirPath, err)
 	}
 
-	timeLogFilePath := filepath.Join(fullDirPath, timeLogFilename)
+	timeLogFilePath := filepath.Join(fullDirPath, TimeLogFilename)
 
 	_, err = os.Stat(timeLogFilePath)
 	if errors.Is(err, os.ErrNotExist) {
