@@ -21,9 +21,9 @@ type Entry struct {
 }
 
 type StatsCollection struct {
-	Daily   Stats
-	Weekly  Stats
-	Monthly Stats
+	Daily       Stats
+	Weekly      Stats
+	Monthly     Stats
 	ArrivedTime time.Time
 }
 
@@ -192,17 +192,27 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 }
 
 func UpdateStatsCollection(entry Entry, statsCollection *StatsCollection) {
-	if strings.Contains(entry.Description, "**") {
-		return
-	}
+	isSlackTime := strings.Contains(entry.Description, "**")
 	if entry.Today {
-		statsCollection.Daily.Work += entry.Duration
+		if isSlackTime {
+			statsCollection.Daily.Slack += entry.Duration
+		} else {
+			statsCollection.Daily.Work += entry.Duration
+		}
 	}
 	if entry.CurrentWeek {
-		statsCollection.Weekly.Work += entry.Duration
+		if isSlackTime {
+			statsCollection.Weekly.Slack += entry.Duration
+		} else {
+			statsCollection.Weekly.Work += entry.Duration
+		}
 	}
 	if entry.CurrentMonth {
-		statsCollection.Monthly.Work += entry.Duration
+		if isSlackTime {
+			statsCollection.Monthly.Slack += entry.Duration
+		} else {
+			statsCollection.Monthly.Work += entry.Duration
+		}
 	}
 }
 
