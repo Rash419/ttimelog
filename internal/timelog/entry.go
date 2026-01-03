@@ -24,6 +24,7 @@ type StatsCollection struct {
 	Daily   Stats
 	Weekly  Stats
 	Monthly Stats
+	ArrivedTime time.Time
 }
 
 type Stats struct {
@@ -177,6 +178,7 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 
 		if entry.Today && IsArrivedMessage(entry.Description) {
 			handledArrivedMessage = true
+			statsCollection.ArrivedTime = entry.EndTime
 		}
 
 		UpdateStatsCollection(entry, &statsCollection)
@@ -216,6 +218,10 @@ func FormatDuration(diff time.Duration) string {
 
 func IsArrivedMessage(val string) bool {
 	return val == "**arrived" || val == "arrived**"
+}
+
+func FormatTime(t time.Time) string {
+	return t.Format("15h04m")
 }
 
 func FormatStatDuration(diff time.Duration) string {

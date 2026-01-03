@@ -194,7 +194,12 @@ func createStatsContent(width int, m model) string {
 	dailyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 	weeklyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 
-	dailyStat := colStyle.Render("TODAY " + dailyBar.ViewAs(dailyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Daily.Work) + "\nLeft: 6h52m → 05:13")
+	arrivedTime := timelog.FormatTime(m.statsCollection.ArrivedTime)
+
+	timeRemaining := targetDailyHours - m.statsCollection.Daily.Work.Hours()
+	timeRemainingDuration := time.Duration(timeRemaining * float64(time.Hour))
+
+	dailyStat := colStyle.Render("TODAY " + dailyBar.ViewAs(dailyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Daily.Work) + "\nLeft: " + arrivedTime + " → " + timelog.FormatStatDuration(timeRemainingDuration))
 	weeklyStat := colStyle.Render("WEEK " + weeklyBar.ViewAs(weeklyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Weekly.Work) + "\nSlack: 0h0m")
 	monthlyStat := colStyle.Render("MONTH " + timelog.FormatStatDuration(m.statsCollection.Monthly.Work) + "\nLast: 0h0m/22d")
 
