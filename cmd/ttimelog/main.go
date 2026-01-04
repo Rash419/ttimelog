@@ -408,7 +408,11 @@ func main() {
 		log.Fatalf("Failed to create logFile with error[%v]", err.Error())
 	}
 
-	defer logFile.Close()
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			slog.Error("Failed to close log file", "error", err)
+		}
+	}()
 
 	slogger := config.GetSlogger(logFile)
 	slog.SetDefault(slogger)

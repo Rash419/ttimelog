@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -57,7 +58,11 @@ func SaveEntry(entry Entry, addNewLine bool, timeLogFilePath string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			slog.Error("Failed to close file", "error", err)
+		}
+	}()
 
 	dateAndTime := entry.EndTime.Format(timeLayout)
 
@@ -151,7 +156,11 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 	if err != nil {
 		return entries, statsCollection, handledArrivedMessage, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			slog.Error("Failed to close file", "error", err)
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

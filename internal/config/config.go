@@ -39,7 +39,11 @@ func SetupTimeLogDirectory(userDir string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to create timeLogFile[%s] with error[%v]", timeLogFilePath, err)
 		}
-		defer timeLogFile.Close()
+		defer func() {
+			if err := timeLogFile.Close(); err != nil {
+				slog.Error("Failed to close time log file", "error", err)
+			}
+		}()
 		slog.Info("Successfully created", "file", timeLogFilePath)
 	} else if err != nil {
 		return "", fmt.Errorf("failed to open timeLogFile[%s] with error[%v]", timeLogFilePath, err)

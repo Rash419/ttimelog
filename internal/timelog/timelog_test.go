@@ -70,7 +70,9 @@ func TestLoadEntries(t *testing.T) {
 	}
 
 	tmpFilename := tmpFile.Name()
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		t.Errorf("Failed to close temp file: %v", err)
+	}
 
 	entries, _, _, err := LoadEntries(tmpFilename)
 
