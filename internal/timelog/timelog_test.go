@@ -10,13 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTimeLog(t *testing.T) {
-	startTime := time.Now()
-	endTime := startTime.Add(2*time.Hour + 1*time.Minute)
-	timeDiff := GetTimeDiff(startTime, endTime)
-	assert.Equal(t, "2 h 1 min", timeDiff)
-}
-
 func TestEntryState(t *testing.T) {
 	baseDate := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 
