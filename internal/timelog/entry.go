@@ -113,7 +113,7 @@ func GetEntryState(t time.Time, now ...time.Time) (bool, bool, bool) {
 // 2025-10-17 13:30 +0530: Working on ttimelog
 func parseEntry(line string, firstEntry bool, previousEntry Entry) (Entry, error) {
 	// It splits in 3 strings and we merge them later
-	tokens := strings.Split(line, ":")
+	tokens := strings.SplitN(line, ":", 3)
 	if len(tokens) < 3 {
 		return Entry{}, errors.New("invalid format")
 	}
