@@ -22,6 +22,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/fsnotify/fsnotify"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 type model struct {
@@ -404,15 +405,7 @@ func (m model) createProjectTree() string {
 		Height(15).
 		Background(lipgloss.Color("235"))
 
-	box := overlayStyle.Render(m.projectTree.View())
-
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		box,
-	)
+	return overlayStyle.Render(m.projectTree.View())
 }
 
 func (m model) View() string {
@@ -451,18 +444,18 @@ func (m model) View() string {
 		Focused: m.focus == focusFooter,
 	}
 
-	innerView := lipgloss.JoinVertical(lipgloss.Left,
+	mainView := lipgloss.JoinVertical(lipgloss.Left,
 		headerPane.Render(),
 		statsPane.Render(),
 		bodyPane.Render(),
 		footerPane.Render(),
 	)
 
-	if m.showProjectOverlay {
-		return lipgloss.JoinVertical(lipgloss.Top, innerView, m.createProjectTree())
+	if !m.showProjectOverlay {
+		return mainView
 	}
 
-	return innerView
+	return overlay.Composite(m.createProjectTree(), mainView, overlay.Center, overlay.Center, 0, 0)
 }
 
 type fileChangedMsg struct{}
