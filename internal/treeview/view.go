@@ -1,6 +1,7 @@
 package treeview
 
 import (
+	"log/slog"
 	"strings"
 )
 
@@ -83,5 +84,6 @@ func (t *TreeView) View() string {
 		b.WriteString("\n")
 	}
 
+	slog.Debug("Treeview", "treeview", b.String())
 	return b.String()
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/Rash419/ttimelog/internal/config"
 	"github.com/Rash419/ttimelog/internal/layout"
 	"github.com/Rash419/ttimelog/internal/timelog"
+	"github.com/Rash419/ttimelog/internal/treeview"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -38,6 +39,8 @@ type model struct {
 	wg                    *sync.WaitGroup
 	timeLogFilePath       string
 	focus                 Focus
+	showProjectOverlay    bool
+	projectTree           *treeview.TreeView
 }
 
 const (
@@ -68,6 +71,31 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 
 	taskTable := createBodyContent(0, 0, entries)
 
+	nodeA := treeview.TreeNode{
+		Label:    "A",
+		Expanded: true,
+	}
+
+	nodeB := treeview.TreeNode{
+		Label:    "B",
+		Expanded: true,
+	}
+
+	nodeC := treeview.TreeNode{
+		Label:    "C",
+		Expanded: true,
+	}
+
+	nodeD := treeview.TreeNode{
+		Label:    "D",
+		Expanded: true,
+	}
+
+	nodeC.Children = append(nodeC.Children, &nodeD)
+	nodeA.Children = append(nodeA.Children, &nodeB, &nodeC)
+
+	projectTree := treeview.NewTreeView(&nodeA)
+
 	return model{
 		textInput:             txtInput,
 		err:                   nil,
@@ -81,6 +109,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		wg:                    wg,
 		timeLogFilePath:       timeLogFilePath,
 		focus:                 focusFooter,
+		projectTree:           projectTree,
 	}
 }
 
@@ -201,14 +230,26 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 	case "enter":
 		m.handleInput()
 		return keyHandled
+	case "ctrl+p":
+		if m.showProjectOverlay {
+			m.showProjectOverlay = false
+		} else {
+			m.showProjectOverlay = true
+		}
+		return keyHandled
+	case "esc":
+		m.showProjectOverlay = false
+		return keyHandled
 	case "1":
 		m.focus = focusHeader
 		m.textInput.Blur()
 		m.taskTable.Blur()
+		return keyHandled
 	case "2":
 		m.focus = focusStats
 		m.textInput.Blur()
 		m.taskTable.Blur()
+		return keyHandled
 	case "3":
 		m.focus = focusTable
 		m.textInput.Blur()
@@ -354,6 +395,26 @@ func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
 	return taskTable
 }
 
+func (m model) createProjectTree() string {
+	overlayStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1, 2).
+		Width(40).
+		Height(15).
+		Background(lipgloss.Color("235"))
+
+	box := overlayStyle.Render(m.projectTree.View())
+
+	return lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		box,
+	)
+}
+
 func (m model) View() string {
 	// make sure width is not negative
 	availableWidth := max(m.width-2, 1)
@@ -396,6 +457,10 @@ func (m model) View() string {
 		bodyPane.Render(),
 		footerPane.Render(),
 	)
+
+	if m.showProjectOverlay {
+		return lipgloss.JoinVertical(lipgloss.Top, innerView, m.createProjectTree())
+	}
 
 	return innerView
 }

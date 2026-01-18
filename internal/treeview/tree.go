@@ -1,5 +1,7 @@
 package treeview
 
+import "log/slog"
+
 type TreeNode struct {
 	Label    string
 	Children []*TreeNode
@@ -15,6 +17,8 @@ func Traverse(node *TreeNode, depth int, rows *[]Row) {
 	if node == nil {
 		return
 	}
+
+	slog.Debug("traversing", "node", node.Label)
 
 	*rows = append(*rows, Row{
 		TreeNode: node,
