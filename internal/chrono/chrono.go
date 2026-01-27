@@ -29,6 +29,7 @@ func ParseProjectList(filePath string) (*treeview.TreeNode, error) {
 	scanner := bufio.NewScanner(file)
 
 	hiddenRoot := treeview.TreeNode{
+		Expanded: true,
 		Label: "Projects",
 	}
 

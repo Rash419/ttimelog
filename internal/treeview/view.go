@@ -1,35 +1,46 @@
 package treeview
 
 import (
-	"log/slog"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/viewport"
 )
 
 type TreeView struct {
-	Root   *TreeNode
-	Rows   []Row
-	Cursor int
+	Root     *TreeNode
+	Rows     []Row
+	Cursor   int
+	Viewport viewport.Model
 }
 
 func NewTreeView(root *TreeNode) *TreeView {
 	rows := make([]Row, 0)
 	Traverse(root, 0, &rows)
 	return &TreeView{
-		Root:   root,
-		Rows:   rows,
-		Cursor: 0,
+		Root:     root,
+		Rows:     rows,
+		Viewport: viewport.New(10, 20),
+		Cursor:   0,
 	}
 }
 
 func (t *TreeView) MoveDown() {
 	if t.Cursor < len(t.Rows)-1 {
 		t.Cursor++
+
+		if t.Cursor >= t.Viewport.YOffset+t.Viewport.Height {
+			t.Viewport.ScrollDown(1)
+		}
 	}
 }
 
 func (t *TreeView) MoveUp() {
 	if t.Cursor > 0 {
 		t.Cursor--
+	}
+
+	if t.Cursor <= t.Viewport.YOffset+t.Viewport.Height {
+		t.Viewport.ScrollUp(1)
 	}
 }
 
@@ -84,6 +95,11 @@ func (t *TreeView) View() string {
 		b.WriteString("\n")
 	}
 
-	slog.Debug("Treeview", "treeview", b.String())
-	return b.String()
+	t.Viewport.SetContent(b.String())
+	return t.Viewport.View()
+}
+
+func (t *TreeView) SetSize(width, height int) {
+	t.Viewport.Width = width
+	t.Viewport.Height = height
 }

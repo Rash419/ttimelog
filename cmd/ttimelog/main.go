@@ -66,7 +66,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 	txtInput.Placeholder = "What are you working on?"
 	txtInput.Focus()
 
-	timeLogFilePath := filepath.Join(appConfig.TimeLogDirPath,  config.TimeLogFilename)
+	timeLogFilePath := filepath.Join(appConfig.TimeLogDirPath, config.TimeLogFilename)
 	entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(timeLogFilePath)
 	if err != nil {
 		slog.Error("Failed to load entries", "error", err)
@@ -152,6 +152,9 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
 	fixedHeight := HeaderHeight + StatsHeight + FooterHeight + 2
 	bodyHeight := max(msg.Height-fixedHeight, 1)
 	m.taskTable.SetHeight(bodyHeight)
+
+	// Update size of projectTree
+	m.projectTree.SetSize(int(math.Round(float64(m.width)*0.25)), int(math.Round(float64(m.height)*0.25)))
 }
 
 func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
@@ -161,6 +164,9 @@ func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
 	cmds = append(cmds, cmd)
 
 	m.taskTable, cmd = m.taskTable.Update(msg)
+	cmds = append(cmds, cmd)
+
+	m.projectTree.Viewport, cmd = m.projectTree.Viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
 	// Scroll to bottom after table has processed the message
@@ -215,13 +221,13 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 		return keyExit
 	case "j", "down":
 		m.projectTree.MoveDown()
-		return keyHandled
+		return keyIgnored
 	case "k", "up":
 		m.projectTree.MoveUp()
-		return keyHandled
+		return keyIgnored
 	case " ": // space
 		m.projectTree.Toggle()
-		return keyHandled
+		return keyIgnored
 	case "enter":
 		// insert project to task description
 	case "esc":
