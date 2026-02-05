@@ -147,7 +147,7 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
 	m.textInput.Width = availableWidth - prefixSpace - 2 // -2 for safety
 
 	// Update table dimensions
-	newCols := getTableCols(int(math.Round(float64(availableWidth) / 1.3)))
+	newCols := getTableCols(availableWidth)
 	m.taskTable.SetColumns(newCols)
 	fixedHeight := HeaderHeight + StatsHeight + FooterHeight + 2
 	bodyHeight := max(msg.Height-fixedHeight, 1)
