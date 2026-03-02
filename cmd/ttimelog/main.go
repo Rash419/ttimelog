@@ -43,6 +43,8 @@ type model struct {
 	focus                 Focus
 	showProjectOverlay    bool
 	projectTree           *treeview.TreeView
+	dailyTargetHours      float64
+	weeklyTargetHours     float64
 }
 
 const (
@@ -51,11 +53,6 @@ const (
 	FooterHeight = 2
 )
 
-// TODO: update dynamically using config
-const (
-	targetDailyHours  = 8.0
-	targetWeeklyHours = 40.0
-)
 
 type (
 	errMsg error
@@ -95,6 +92,8 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		timeLogFilePath:       timeLogFilePath,
 		focus:                 focusFooter,
 		projectTree:           projectTree,
+		dailyTargetHours:      appConfig.Gtimelog.Hours,
+		weeklyTargetHours:     appConfig.Gtimelog.Hours * 5,
 	}
 }
 
@@ -324,15 +323,15 @@ func (m model) createStatsContent() string {
 
 	colStyle := lipgloss.NewStyle().Width(colWidth).Align(lipgloss.Left)
 
-	dailyPercent := m.statsCollection.Daily.Work.Hours() / targetDailyHours
-	weeklyPercent := m.statsCollection.Weekly.Work.Hours() / targetWeeklyHours
+	dailyPercent := m.statsCollection.Daily.Work.Hours() / m.dailyTargetHours
+	weeklyPercent := m.statsCollection.Weekly.Work.Hours() / m.weeklyTargetHours
 
 	dailyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 	weeklyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 
-	leaveTime := timelog.FormatTime(m.statsCollection.ArrivedTime.Add(time.Duration(targetDailyHours * float64(time.Hour))))
+	leaveTime := timelog.FormatTime(m.statsCollection.ArrivedTime.Add(time.Duration(m.dailyTargetHours * float64(time.Hour))))
 
-	timeRemaining := targetDailyHours - m.statsCollection.Daily.Work.Hours()
+	timeRemaining := m.dailyTargetHours - m.statsCollection.Daily.Work.Hours()
 	timeRemainingDuration := time.Duration(timeRemaining * float64(time.Hour))
 
 	dailyStat := colStyle.Render("TODAY " + dailyBar.ViewAs(dailyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Daily.Work) + "\nLeft: " + leaveTime + " → " + timelog.FormatStatDuration(timeRemainingDuration) + ", Slack: " + timelog.FormatStatDuration(m.statsCollection.Daily.Slack))

@@ -43,3 +43,40 @@ auth_header = Token ABCDXYZ
 	assert.Equal(t, "https://chronophage/rest-api/proxy/tasks", appConfig.Gtimelog.TaskListURL)
 	assert.Equal(t, "Token ABCDXYZ", appConfig.Gtimelog.AuthHeader)
 }
+
+func TestLoadConfigDefaultHours(t *testing.T) {
+	testConfig := `
+[gtimelog]
+task_list_url = https://chronophage/rest-api/proxy/tasks
+auth_header = Token ABCDXYZ
+`
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "ttimelogrc")
+	err := os.WriteFile(tempFile, []byte(testConfig), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	appConfig, err := LoadConfig(tempDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 8.0, appConfig.Gtimelog.Hours)
+}
+
+func TestLoadConfigCustomHours(t *testing.T) {
+	testConfig := `
+[gtimelog]
+task_list_url = https://chronophage/rest-api/proxy/tasks
+auth_header = Token ABCDXYZ
+hours = 7.5
+`
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "ttimelogrc")
+	err := os.WriteFile(tempFile, []byte(testConfig), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	appConfig, err := LoadConfig(tempDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 7.5, appConfig.Gtimelog.Hours)
+}

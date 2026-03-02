@@ -58,8 +58,9 @@ func SetupTimeLogDirectory(userDir string) (string, error) {
 
 type AppConfig struct {
 	Gtimelog struct {
-		AuthHeader  string `ini:"auth_header"`
-		TaskListURL string `ini:"task_list_url"`
+		AuthHeader  string  `ini:"auth_header"`
+		TaskListURL string  `ini:"task_list_url"`
+		Hours       float64 `ini:"hours"`
 	} `ini:"gtimelog"`
 	TimeLogDirPath string
 }
@@ -76,5 +77,8 @@ func LoadConfig(timeLogDir string) (*AppConfig, error) {
 		return nil, err
 	}
 	cfg.TimeLogDirPath = timeLogDir
+	if cfg.Gtimelog.Hours == 0 {
+		cfg.Gtimelog.Hours = 8.0
+	}
 	return &cfg, nil
 }
