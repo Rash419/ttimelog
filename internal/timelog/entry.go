@@ -19,6 +19,7 @@ type Entry struct {
 	Today        bool
 	CurrentWeek  bool
 	CurrentMonth bool
+	LineNumber   int
 }
 
 type StatsCollection struct {
@@ -33,7 +34,7 @@ type Stats struct {
 	Slack time.Duration
 }
 
-const timeLayout = "2006-01-02 15:04 -0700"
+const TimeLayout = "2006-01-02 15:04 -0700"
 
 func NewEntry(endTime time.Time, description string, duration time.Duration) Entry {
 	today, currentWeek, currentMonth := GetEntryState(endTime)
@@ -64,7 +65,7 @@ func SaveEntry(entry Entry, addNewLine bool, timeLogFilePath string) error {
 		}
 	}()
 
-	dateAndTime := entry.EndTime.Format(timeLayout)
+	dateAndTime := entry.EndTime.Format(TimeLayout)
 
 	saveFormat := "%s: %s\n"
 	if addNewLine {
@@ -126,7 +127,7 @@ func parseEntry(line string, firstEntry bool, previousEntry Entry) (Entry, error
 
 	parsedDate := dateAndTimeTokens[0]
 
-	endTime, err := time.Parse(timeLayout, dateAndTime)
+	endTime, err := time.Parse(TimeLayout, dateAndTime)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -163,8 +164,10 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 	}()
 
 	scanner := bufio.NewScanner(file)
+	lineNumber := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineNumber++
 		if line == "" {
 			continue
 		}
@@ -182,6 +185,8 @@ func LoadEntries(filePath string) ([]Entry, StatsCollection, bool, error) {
 		if err != nil {
 			return entries, statsCollection, handledArrivedMessage, err
 		}
+
+		entry.LineNumber = lineNumber
 
 		if entry.Today && IsArrivedMessage(entry.Description) {
 			handledArrivedMessage = true
@@ -248,4 +253,63 @@ func FormatStatDuration(diff time.Duration) string {
 	diff -= hours * time.Hour
 	mins := diff / time.Minute
 	return fmt.Sprintf("%dh%dm", hours, mins)
+}
+
+func readAllLines(filePath string) ([]string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			slog.Error("Failed to close file", "error", err)
+		}
+	}()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
+func writeAllLines(filePath string, lines []string) error {
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n"
+	}
+	return os.WriteFile(filePath, []byte(content), 0o644)
+}
+
+// EditEntry replaces the line at lineNumber (1-indexed) with a new timestamp and description.
+func EditEntry(filePath string, lineNumber int, newTimestamp string, newDescription string) error {
+	lines, err := readAllLines(filePath)
+	if err != nil {
+		return err
+	}
+
+	idx := lineNumber - 1
+	if idx < 0 || idx >= len(lines) {
+		return fmt.Errorf("line number %d out of range (file has %d lines)", lineNumber, len(lines))
+	}
+
+	lines[idx] = fmt.Sprintf("%s: %s", newTimestamp, newDescription)
+	return writeAllLines(filePath, lines)
+}
+
+// DeleteEntry removes the line at lineNumber (1-indexed) from the file.
+func DeleteEntry(filePath string, lineNumber int) error {
+	lines, err := readAllLines(filePath)
+	if err != nil {
+		return err
+	}
+
+	idx := lineNumber - 1
+	if idx < 0 || idx >= len(lines) {
+		return fmt.Errorf("line number %d out of range (file has %d lines)", lineNumber, len(lines))
+	}
+
+	lines = append(lines[:idx], lines[idx+1:]...)
+	return writeAllLines(filePath, lines)
 }

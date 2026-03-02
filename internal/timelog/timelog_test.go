@@ -89,3 +89,91 @@ func TestLoadEntries(t *testing.T) {
 	// Entry 3 (Today 10:00) -> Duration 1h
 	assert.Equal(t, 1*time.Hour, entries[3].Duration)
 }
+
+func TestLoadEntriesLineNumbers(t *testing.T) {
+	tmpFile := createTempFile(t, strings.Join([]string{
+		"2025-01-15 09:00 +0530: arrived**",
+		"",
+		"2025-01-15 10:00 +0530: Working on task A",
+		"2025-01-15 11:00 +0530: Working on task B",
+	}, "\n"))
+
+	entries, _, _, err := LoadEntries(tmpFile)
+	assert.NoError(t, err)
+	assert.Len(t, entries, 3)
+
+	assert.Equal(t, 1, entries[0].LineNumber)
+	assert.Equal(t, 3, entries[1].LineNumber) // line 2 is empty
+	assert.Equal(t, 4, entries[2].LineNumber)
+}
+
+func TestEditEntry(t *testing.T) {
+	content := strings.Join([]string{
+		"2025-01-15 09:00 +0530: arrived**",
+		"2025-01-15 10:00 +0530: Working on task A",
+		"2025-01-15 11:00 +0530: Working on task B",
+	}, "\n")
+	tmpFile := createTempFile(t, content)
+
+	err := EditEntry(tmpFile, 2, "2025-01-15 10:30 +0530", "Updated task A")
+	assert.NoError(t, err)
+
+	result, err := os.ReadFile(tmpFile)
+	assert.NoError(t, err)
+
+	lines := strings.Split(strings.TrimRight(string(result), "\n"), "\n")
+	assert.Len(t, lines, 3)
+	assert.Equal(t, "2025-01-15 09:00 +0530: arrived**", lines[0])
+	assert.Equal(t, "2025-01-15 10:30 +0530: Updated task A", lines[1])
+	assert.Equal(t, "2025-01-15 11:00 +0530: Working on task B", lines[2])
+}
+
+func TestDeleteEntry(t *testing.T) {
+	content := strings.Join([]string{
+		"2025-01-15 09:00 +0530: arrived**",
+		"2025-01-15 10:00 +0530: Working on task A",
+		"2025-01-15 11:00 +0530: Working on task B",
+	}, "\n")
+	tmpFile := createTempFile(t, content)
+
+	err := DeleteEntry(tmpFile, 2)
+	assert.NoError(t, err)
+
+	result, err := os.ReadFile(tmpFile)
+	assert.NoError(t, err)
+
+	lines := strings.Split(strings.TrimRight(string(result), "\n"), "\n")
+	assert.Len(t, lines, 2)
+	assert.Equal(t, "2025-01-15 09:00 +0530: arrived**", lines[0])
+	assert.Equal(t, "2025-01-15 11:00 +0530: Working on task B", lines[1])
+}
+
+func TestEditEntryOutOfRange(t *testing.T) {
+	tmpFile := createTempFile(t, "2025-01-15 09:00 +0530: arrived**")
+
+	err := EditEntry(tmpFile, 5, "2025-01-15 10:00 +0530", "test")
+	assert.Error(t, err)
+}
+
+func TestDeleteEntryOutOfRange(t *testing.T) {
+	tmpFile := createTempFile(t, "2025-01-15 09:00 +0530: arrived**")
+
+	err := DeleteEntry(tmpFile, 0)
+	assert.Error(t, err)
+}
+
+func createTempFile(t *testing.T, content string) string {
+	t.Helper()
+	tmpFile, err := os.CreateTemp(t.TempDir(), "ttimelog-*.txt")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	if _, err := tmpFile.WriteString(content); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+	name := tmpFile.Name()
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+	return name
+}

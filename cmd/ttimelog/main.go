@@ -46,6 +46,10 @@ type model struct {
 	projectTree           *treeview.TreeView
 	dailyTargetHours      float64
 	weeklyTargetHours     float64
+	entryIndices          []int
+	confirmDelete         bool
+	editingEntry          int
+	statusMessage         string
 }
 
 const (
@@ -70,7 +74,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		slog.Error("Failed to load entries", "error", err)
 	}
 
-	taskTable := createBodyContent(0, 0, entries)
+	taskTable, entryIndices := createBodyContent(0, 0, entries)
 
 	projectListFile := filepath.Join(appConfig.TimeLogDirPath, config.ProjectListFile)
 	rootNode, err := chrono.ParseProjectList(projectListFile)
@@ -95,6 +99,8 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		projectTree:           projectTree,
 		dailyTargetHours:      appConfig.Gtimelog.Hours,
 		weeklyTargetHours:     appConfig.Gtimelog.Hours * 5,
+		entryIndices:          entryIndices,
+		editingEntry:          -1,
 	}
 }
 
@@ -105,9 +111,29 @@ func (m model) Init() tea.Cmd {
 	)
 }
 
+func (m *model) reloadEntries() {
+	entries, statsCollections, handledArrivedMessage, err := timelog.LoadEntries(m.timeLogFilePath)
+	if err != nil {
+		slog.Error("Failed to reload entries", "error", err)
+		return
+	}
+	m.entries = entries
+	m.statsCollection = statsCollections
+	m.handledArrivedMessage = handledArrivedMessage
+
+	rows, indices := getTableRows(m.entries)
+	m.taskTable.SetRows(rows)
+	m.entryIndices = indices
+}
+
 func (m *model) handleInput() {
 	val := m.textInput.Value()
 	if val == "" {
+		return
+	}
+
+	if m.editingEntry >= 0 {
+		m.handleEditInput(val)
 		return
 	}
 
@@ -128,12 +154,36 @@ func (m *model) handleInput() {
 		slog.Error("Failed to add entry with description", "error", newEntry.Description)
 	}
 
-	rows := getTableRows(m.entries)
+	rows, indices := getTableRows(m.entries)
 	m.taskTable.SetRows(rows)
+	m.entryIndices = indices
 	m.scrollToBottom = true
 
 	timelog.UpdateStatsCollection(newEntry, &m.statsCollection)
 
+	m.textInput.Reset()
+}
+
+func (m *model) handleEditInput(val string) {
+	entry := m.entries[m.editingEntry]
+
+	// Parse "YYYY-MM-DD HH:MM +ZZZZ: description"
+	parts := strings.SplitN(val, ": ", 2)
+	if len(parts) < 2 {
+		m.statusMessage = "Invalid format, expected 'YYYY-MM-DD HH:MM +ZZZZ: description'"
+		return
+	}
+
+	newTimestamp := parts[0]
+	newDescription := parts[1]
+
+	if err := timelog.EditEntry(m.timeLogFilePath, entry.LineNumber, newTimestamp, newDescription); err != nil {
+		slog.Error("Failed to edit entry", "error", err)
+	}
+
+	m.reloadEntries()
+	m.editingEntry = -1
+	m.statusMessage = ""
 	m.textInput.Reset()
 }
 
@@ -189,8 +239,9 @@ func (m *model) handleFileChangedMsg() {
 	m.statsCollection = statsCollections
 	m.handledArrivedMessage = handledArrivedMessage
 
-	rows := getTableRows(m.entries)
+	rows, indices := getTableRows(m.entries)
 	m.taskTable.SetRows(rows)
+	m.entryIndices = indices
 	m.scrollToBottom = true
 }
 
@@ -240,6 +291,44 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 }
 
 func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
+	if m.confirmDelete {
+		if msg.String() == "y" {
+			cursor := m.taskTable.Cursor()
+			if cursor >= 0 && cursor < len(m.entryIndices) {
+				entry := m.entries[m.entryIndices[cursor]]
+				if err := timelog.DeleteEntry(m.timeLogFilePath, entry.LineNumber); err != nil {
+					slog.Error("Failed to delete entry", "error", err)
+				}
+				m.reloadEntries()
+			}
+		}
+		m.confirmDelete = false
+		m.statusMessage = ""
+		return keyHandled
+	}
+
+	switch msg.String() {
+	case "d":
+		if len(m.entryIndices) == 0 {
+			return keyHandled
+		}
+		m.confirmDelete = true
+		m.statusMessage = "Delete? (y/n)"
+		return keyHandled
+	case "e":
+		cursor := m.taskTable.Cursor()
+		if cursor < 0 || cursor >= len(m.entryIndices) {
+			return keyHandled
+		}
+		entry := m.entries[m.entryIndices[cursor]]
+		m.editingEntry = m.entryIndices[cursor]
+		m.statusMessage = "Editing entry..."
+		m.textInput.SetValue(fmt.Sprintf("%s: %s", entry.EndTime.Format(timelog.TimeLayout), entry.Description))
+		m.textInput.Focus()
+		m.taskTable.Blur()
+		m.focus = focusFooter
+		return keyHandled
+	}
 	return keyIgnored
 }
 
@@ -247,6 +336,14 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 	switch msg.String() {
 	case "ctrl+c":
 		return keyExit
+	case "esc":
+		if m.editingEntry >= 0 {
+			m.editingEntry = -1
+			m.statusMessage = ""
+			m.textInput.Reset()
+			return keyHandled
+		}
+		return keyIgnored
 	case "enter":
 		if m.focus == focusFooter {
 			m.handleInput()
@@ -384,8 +481,9 @@ func getTableCols(width int) []table.Column {
 	return columns
 }
 
-func getTableRows(entries []timelog.Entry) []table.Row {
+func getTableRows(entries []timelog.Entry) ([]table.Row, []int) {
 	rows := make([]table.Row, 0)
+	indices := make([]int, 0)
 
 	var lastEndTime time.Time
 	for i, entry := range entries {
@@ -395,6 +493,7 @@ func getTableRows(entries []timelog.Entry) []table.Row {
 
 		// only show entries for today
 		if entryDate != currentDate {
+			lastEndTime = entry.EndTime
 			continue
 		}
 
@@ -405,14 +504,15 @@ func getTableRows(entries []timelog.Entry) []table.Row {
 		timeRange := fmt.Sprintf("%s - %s", startTime.Format("15:04"), entry.EndTime.Format("15:04"))
 		lastEndTime = entry.EndTime
 		rows = append(rows, table.Row{timelog.FormatDuration(entry.Duration), timeRange, entry.Description})
+		indices = append(indices, i)
 	}
 
-	return rows
+	return rows, indices
 }
 
-func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
+func createBodyContent(width, height int, entries []timelog.Entry) (table.Model, []int) {
 	cols := getTableCols(width)
-	rows := getTableRows(entries)
+	rows, indices := getTableRows(entries)
 
 	km := table.DefaultKeyMap()
 	km.HalfPageDown = key.NewBinding(
@@ -427,7 +527,7 @@ func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
 		table.WithHeight(height),
 		table.WithKeyMap(km),
 	)
-	return taskTable
+	return taskTable, indices
 }
 
 func (m model) View() string {
@@ -459,9 +559,14 @@ func (m model) View() string {
 		Focused: m.focus == focusTable,
 	}
 
+	footerTitle := "[4]"
+	if m.statusMessage != "" {
+		footerTitle = "[4] " + m.statusMessage
+	}
+
 	footerPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[4]",
+		Title:   footerTitle,
 		View:    m.createFooterContent,
 		Focused: m.focus == focusFooter,
 	}
