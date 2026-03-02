@@ -354,24 +354,21 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		m.showProjectOverlay = true
 		m.focus = focusProjectTree
 		return keyHandled
-	case "1", "2", "3", "4":
-		if m.focus == focusFooter {
-			return keyIgnored
-		}
+	case "alt+1", "alt+2", "alt+3", "alt+4":
 		switch msg.String() {
-		case "1":
+		case "alt+1":
 			m.focus = focusHeader
 			m.textInput.Blur()
 			m.taskTable.Blur()
-		case "2":
+		case "alt+2":
 			m.focus = focusStats
 			m.textInput.Blur()
 			m.taskTable.Blur()
-		case "3":
+		case "alt+3":
 			m.focus = focusTable
 			m.textInput.Blur()
 			m.taskTable.Focus()
-		case "4":
+		case "alt+4":
 			m.focus = focusFooter
 			m.taskTable.Blur()
 			m.textInput.Focus()
@@ -539,14 +536,14 @@ func (m model) View() string {
 
 	headerPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[1]",
+		Title:   "[M-1]",
 		View:    createHeaderContent,
 		Focused: m.focus == focusHeader,
 	}
 
 	statsPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[2]",
+		Title:   "[M-2]",
 		View:    m.createStatsContent,
 		Focused: m.focus == focusStats,
 	}
@@ -556,15 +553,15 @@ func (m model) View() string {
 
 	bodyPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[3]",
+		Title:   "[M-3]",
 		View:    m.taskTable.View,
 		Height:  bodyHeight,
 		Focused: m.focus == focusTable,
 	}
 
-	footerTitle := "[4]"
+	footerTitle := "[M-4]"
 	if m.statusMessage != "" {
-		footerTitle = "[4] " + m.statusMessage
+		footerTitle = "[M-4] " + m.statusMessage
 	}
 
 	footerPane := layout.Pane{
