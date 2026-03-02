@@ -354,25 +354,28 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		m.showProjectOverlay = true
 		m.focus = focusProjectTree
 		return keyHandled
-	case "1":
-		m.focus = focusHeader
-		m.textInput.Blur()
-		m.taskTable.Blur()
-		return keyHandled
-	case "2":
-		m.focus = focusStats
-		m.textInput.Blur()
-		m.taskTable.Blur()
-		return keyHandled
-	case "3":
-		m.focus = focusTable
-		m.textInput.Blur()
-		m.taskTable.Focus()
-		return keyHandled
-	case "4":
-		m.focus = focusFooter
-		m.taskTable.Blur()
-		m.textInput.Focus()
+	case "1", "2", "3", "4":
+		if m.focus == focusFooter {
+			return keyIgnored
+		}
+		switch msg.String() {
+		case "1":
+			m.focus = focusHeader
+			m.textInput.Blur()
+			m.taskTable.Blur()
+		case "2":
+			m.focus = focusStats
+			m.textInput.Blur()
+			m.taskTable.Blur()
+		case "3":
+			m.focus = focusTable
+			m.textInput.Blur()
+			m.taskTable.Focus()
+		case "4":
+			m.focus = focusFooter
+			m.taskTable.Blur()
+			m.textInput.Focus()
+		}
 		return keyHandled
 	}
 
