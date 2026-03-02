@@ -17,6 +17,7 @@ import (
 	"github.com/Rash419/ttimelog/internal/layout"
 	"github.com/Rash419/ttimelog/internal/timelog"
 	"github.com/Rash419/ttimelog/internal/treeview"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -238,13 +239,20 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 	return keyHandled
 }
 
+func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
+	return keyIgnored
+}
+
 func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 	switch msg.String() {
 	case "ctrl+c":
 		return keyExit
 	case "enter":
-		m.handleInput()
-		return keyHandled
+		if m.focus == focusFooter {
+			m.handleInput()
+			return keyHandled
+		}
+		return keyIgnored
 	case "ctrl+p":
 		m.showProjectOverlay = true
 		m.focus = focusProjectTree
@@ -270,6 +278,11 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		m.textInput.Focus()
 		return keyHandled
 	}
+
+	if m.focus == focusTable {
+		return m.handleTableKeyMsg(msg)
+	}
+
 	return keyIgnored
 }
 
@@ -400,11 +413,19 @@ func getTableRows(entries []timelog.Entry) []table.Row {
 func createBodyContent(width, height int, entries []timelog.Entry) table.Model {
 	cols := getTableCols(width)
 	rows := getTableRows(entries)
+
+	km := table.DefaultKeyMap()
+	km.HalfPageDown = key.NewBinding(
+		key.WithKeys("ctrl+d"),
+		key.WithHelp("ctrl+d", "½ page down"),
+	)
+
 	taskTable := table.New(
 		table.WithColumns(cols),
 		table.WithRows(rows),
 		table.WithFocused(true),
 		table.WithHeight(height),
+		table.WithKeyMap(km),
 	)
 	return taskTable
 }
