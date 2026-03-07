@@ -379,6 +379,10 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 		case "enter":
 			m.projectTree.Searching = false
 			m.searchInput.Blur()
+			projectPath := m.projectTree.GetProjectPath()
+			if projectPath != "" {
+				m.selectProject(projectPath)
+			}
 			return keyHandled
 		case "up", "down":
 			if msg.String() == "up" {
