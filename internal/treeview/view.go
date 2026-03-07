@@ -31,9 +31,21 @@ type TreeView struct {
 	Searching    bool
 }
 
+func traverseChildren(root *TreeNode, rows *[]Row) {
+	for _, child := range root.Children {
+		Traverse(child, 0, rows)
+	}
+}
+
+func traverseChildrenFiltered(root *TreeNode, rows *[]Row, query string) {
+	for _, child := range root.Children {
+		TraverseFiltered(child, 0, rows, query)
+	}
+}
+
 func NewTreeView(root *TreeNode) *TreeView {
 	rows := make([]Row, 0)
-	Traverse(root, 0, &rows)
+	traverseChildren(root, &rows)
 	return &TreeView{
 		Root:     root,
 		Rows:     rows,
@@ -64,7 +76,7 @@ func (t *TreeView) MoveUp() {
 
 func (t *TreeView) rebuild() {
 	t.Rows = nil
-	Traverse(t.Root, 0, &t.Rows)
+	traverseChildren(t.Root, &t.Rows)
 
 	// Clamp cursor (important when collapsing nodes)
 	if t.Cursor >= len(t.Rows) {
@@ -78,9 +90,9 @@ func (t *TreeView) rebuild() {
 func (t *TreeView) rebuildFiltered() {
 	t.Rows = nil
 	if t.SearchQuery == "" {
-		Traverse(t.Root, 0, &t.Rows)
+		traverseChildren(t.Root, &t.Rows)
 	} else {
-		TraverseFiltered(t.Root, 0, &t.Rows, t.SearchQuery)
+		traverseChildrenFiltered(t.Root, &t.Rows, t.SearchQuery)
 	}
 
 	if t.Cursor >= len(t.Rows) {
