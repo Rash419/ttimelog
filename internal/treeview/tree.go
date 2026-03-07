@@ -33,6 +33,42 @@ func Traverse(node *TreeNode, depth int, rows *[]Row) {
 	}
 }
 
+// nodeMatches returns true if the node or any descendant matches the query (case-insensitive).
+func nodeMatches(node *TreeNode, query string) bool {
+	if strings.Contains(strings.ToLower(node.Label), query) {
+		return true
+	}
+	for _, child := range node.Children {
+		if nodeMatches(child, query) {
+			return true
+		}
+	}
+	return false
+}
+
+// TraverseFiltered performs a depth-first traversal including only nodes that match
+// the query or are ancestors of matching nodes. Matching subtrees are shown expanded.
+func TraverseFiltered(node *TreeNode, depth int, rows *[]Row, query string) {
+	if node == nil {
+		return
+	}
+
+	lowerQuery := strings.ToLower(query)
+
+	if !nodeMatches(node, lowerQuery) {
+		return
+	}
+
+	*rows = append(*rows, Row{
+		TreeNode: node,
+		Depth:    depth,
+	})
+
+	for _, child := range node.Children {
+		TraverseFiltered(child, depth+1, rows, query)
+	}
+}
+
 func AppendPath(rootNode *TreeNode, path []string, index int) {
 	// Base case: no more labels to consume
 	if len(path) == index {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +51,7 @@ type model struct {
 	editingEntry          int
 	reassigningEntry      int
 	statusMessage         string
+	searchInput           textinput.Model
 }
 
 const (
@@ -85,6 +85,10 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 	}
 	projectTree := treeview.NewTreeView(rootNode)
 
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search projects..."
+	searchInput.CharLimit = 100
+
 	return model{
 		textInput:             txtInput,
 		err:                   nil,
@@ -105,6 +109,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		editingEntry:          -1,
 		deleteTargetEntry:     -1,
 		reassigningEntry:      -1,
+		searchInput:           searchInput,
 	}
 }
 
@@ -207,8 +212,11 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
 	bodyHeight := max(msg.Height-fixedHeight, 1)
 	m.taskTable.SetHeight(bodyHeight)
 
-	// Update size of projectTree
-	m.projectTree.SetSize(int(math.Round(float64(m.width)*0.25)), int(math.Round(float64(m.height)*0.25)))
+	// Update size of projectTree (subtract borders + breadcrumb + hints + search bar)
+	overlayWidth := max(30, min(m.width*50/100, 80))
+	overlayHeight := max(10, min(m.height*60/100, 30))
+	// -2 borders, -1 breadcrumb, -1 hints, -1 search bar, -1 title
+	m.projectTree.SetSize(overlayWidth-2, overlayHeight-6)
 }
 
 func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
@@ -269,6 +277,38 @@ const (
 )
 
 func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
+	// When searching, handle search-specific keys first
+	if m.projectTree.Searching {
+		switch msg.String() {
+		case "ctrl+c":
+			return keyExit
+		case "esc":
+			m.projectTree.StopSearch()
+			m.searchInput.Reset()
+			m.searchInput.Blur()
+			return keyHandled
+		case "enter":
+			// Accept the filter and stop search mode (keep results)
+			m.projectTree.Searching = false
+			m.searchInput.Blur()
+			return keyHandled
+		case "up", "down":
+			if msg.String() == "up" {
+				m.projectTree.MoveUp()
+			} else {
+				m.projectTree.MoveDown()
+			}
+			return keyHandled
+		default:
+			// Forward to search input
+			var cmd tea.Cmd
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			_ = cmd
+			m.projectTree.UpdateSearch(m.searchInput.Value())
+			return keyHandled
+		}
+	}
+
 	switch msg.String() {
 	case "ctrl+c":
 		return keyExit
@@ -280,6 +320,11 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 		return keyHandled
 	case " ": // space
 		m.projectTree.Toggle()
+		return keyHandled
+	case "/":
+		m.projectTree.StartSearch()
+		m.searchInput.Reset()
+		m.searchInput.Focus()
 		return keyHandled
 	case "enter":
 		projectPath := m.projectTree.GetProjectPath()
@@ -298,15 +343,24 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 				m.reloadEntries()
 				m.reassigningEntry = -1
 				m.showProjectOverlay = false
+				m.projectTree.StopSearch()
+				m.searchInput.Reset()
+				m.searchInput.Blur()
 				m.focus = focusTable
 			} else {
 				m.textInput.SetValue(projectPath)
 				m.showProjectOverlay = false
+				m.projectTree.StopSearch()
+				m.searchInput.Reset()
+				m.searchInput.Blur()
 				m.focus = focusFooter
 			}
 		}
 	case "esc":
 		m.showProjectOverlay = false
+		m.projectTree.StopSearch()
+		m.searchInput.Reset()
+		m.searchInput.Blur()
 		if m.reassigningEntry >= 0 {
 			m.reassigningEntry = -1
 			m.focus = focusTable
@@ -648,11 +702,25 @@ func (m model) View() string {
 		return mainView
 	}
 
+	overlayWidth := max(30, min(m.width*50/100, 80))
+	overlayHeight := max(10, min(m.height*60/100, 30))
+
+	projectContent := func() string {
+		var parts []string
+		if m.projectTree.Searching {
+			parts = append(parts, "/ "+m.searchInput.View())
+		}
+		parts = append(parts, m.projectTree.GetBreadcrumb())
+		parts = append(parts, m.projectTree.View())
+		parts = append(parts, m.projectTree.GetHints())
+		return strings.Join(parts, "\n")
+	}
+
 	projectPane := layout.Pane{
 		Title:   "Projects",
-		Width:   40,
-		Height:  15,
-		View:    m.projectTree.View,
+		Width:   overlayWidth,
+		Height:  overlayHeight,
+		View:    projectContent,
 		Focused: true,
 	}
 

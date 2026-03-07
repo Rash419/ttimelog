@@ -1,16 +1,34 @@
 package treeview
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/lipgloss"
+)
+
+var (
+	selectedStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#3b4261")).
+			Foreground(lipgloss.Color("#c0caf5")).
+			Bold(true)
+	normalStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#a9b1d6"))
+	breadcrumbStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#565f89")).
+			Italic(true)
+	hintsStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#3b4261"))
 )
 
 type TreeView struct {
-	Root     *TreeNode
-	Rows     []Row
-	Cursor   int
-	Viewport viewport.Model
+	Root         *TreeNode
+	Rows         []Row
+	Cursor       int
+	Viewport     viewport.Model
+	SearchQuery  string
+	Searching    bool
 }
 
 func NewTreeView(root *TreeNode) *TreeView {
@@ -39,7 +57,7 @@ func (t *TreeView) MoveUp() {
 		t.Cursor--
 	}
 
-	if t.Cursor <= t.Viewport.YOffset+t.Viewport.Height {
+	if t.Cursor < t.Viewport.YOffset {
 		t.Viewport.ScrollUp(1)
 	}
 }
@@ -57,24 +75,58 @@ func (t *TreeView) rebuild() {
 	}
 }
 
+func (t *TreeView) rebuildFiltered() {
+	t.Rows = nil
+	if t.SearchQuery == "" {
+		Traverse(t.Root, 0, &t.Rows)
+	} else {
+		TraverseFiltered(t.Root, 0, &t.Rows, t.SearchQuery)
+	}
+
+	if t.Cursor >= len(t.Rows) {
+		t.Cursor = len(t.Rows) - 1
+	}
+	if t.Cursor < 0 {
+		t.Cursor = 0
+	}
+}
+
+func (t *TreeView) StartSearch() {
+	t.Searching = true
+	t.SearchQuery = ""
+}
+
+func (t *TreeView) StopSearch() {
+	t.Searching = false
+	t.SearchQuery = ""
+	t.rebuild()
+}
+
+func (t *TreeView) UpdateSearch(query string) {
+	t.SearchQuery = query
+	t.rebuildFiltered()
+}
+
 func (t *TreeView) Toggle() {
+	if len(t.Rows) == 0 {
+		return
+	}
 	node := t.Rows[t.Cursor].TreeNode
 	if len(node.Children) == 0 {
 		return
 	}
 	node.Expanded = !node.Expanded
-	t.rebuild()
+	if t.SearchQuery != "" {
+		t.rebuildFiltered()
+	} else {
+		t.rebuild()
+	}
 }
 
 func (t *TreeView) View() string {
 	var b strings.Builder
 
 	for i, row := range t.Rows {
-		cursor := " "
-		if i == t.Cursor {
-			cursor = ">"
-		}
-
 		indent := strings.Repeat("  ", row.Depth)
 
 		icon := " "
@@ -86,17 +138,38 @@ func (t *TreeView) View() string {
 			}
 		}
 
-		b.WriteString(cursor)
-		b.WriteString(" ")
-		b.WriteString(indent)
-		b.WriteString(icon)
-		b.WriteString(" ")
-		b.WriteString(row.TreeNode.Label)
+		line := fmt.Sprintf(" %s%s %s", indent, icon, row.TreeNode.Label)
+
+		// Pad the line to viewport width for full-width highlighting
+		if len(line) < t.Viewport.Width {
+			line += strings.Repeat(" ", t.Viewport.Width-len(line))
+		}
+
+		if i == t.Cursor {
+			b.WriteString(selectedStyle.Render(line))
+		} else {
+			b.WriteString(normalStyle.Render(line))
+		}
 		b.WriteString("\n")
 	}
 
 	t.Viewport.SetContent(b.String())
 	return t.Viewport.View()
+}
+
+func (t *TreeView) GetBreadcrumb() string {
+	if len(t.Rows) == 0 {
+		return ""
+	}
+	node := t.Rows[t.Cursor].TreeNode
+	if node.Path != "" {
+		return breadcrumbStyle.Render(node.Path)
+	}
+	return breadcrumbStyle.Render(node.Label)
+}
+
+func (t *TreeView) GetHints() string {
+	return hintsStyle.Render("space:expand  enter:select  /:search  esc:close")
 }
 
 func (t *TreeView) SetSize(width, height int) {
@@ -105,6 +178,9 @@ func (t *TreeView) SetSize(width, height int) {
 }
 
 func (t *TreeView) GetProjectPath() string {
+	if len(t.Rows) == 0 {
+		return ""
+	}
 	node := t.Rows[t.Cursor].TreeNode
 	if node.Children != nil {
 		return ""
