@@ -52,6 +52,9 @@ type model struct {
 	reassigningEntry      int
 	statusMessage         string
 	searchInput           textinput.Model
+	recentProjects        []string // paths like "collabora:business-development:demo: "
+	recentCursor          int
+	inRecents             bool
 }
 
 const (
@@ -135,6 +138,23 @@ func (m *model) reloadEntries() {
 	m.entryIndices = indices
 }
 
+const maxRecentProjects = 3
+
+func (m *model) addRecentProject(path string) {
+	// Remove duplicate if exists
+	filtered := make([]string, 0, len(m.recentProjects))
+	for _, p := range m.recentProjects {
+		if p != path {
+			filtered = append(filtered, p)
+		}
+	}
+	// Prepend
+	m.recentProjects = append([]string{path}, filtered...)
+	if len(m.recentProjects) > maxRecentProjects {
+		m.recentProjects = m.recentProjects[:maxRecentProjects]
+	}
+}
+
 func (m *model) handleInput() {
 	val := m.textInput.Value()
 	if val == "" {
@@ -212,11 +232,15 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
 	bodyHeight := max(msg.Height-fixedHeight, 1)
 	m.taskTable.SetHeight(bodyHeight)
 
-	// Update size of projectTree (subtract borders + breadcrumb + hints + search bar)
+	// Update size of projectTree (subtract borders + breadcrumb + hints + search bar + recents)
 	overlayWidth := max(30, min(m.width*50/100, 80))
 	overlayHeight := max(10, min(m.height*60/100, 30))
+	recentsLines := 0
+	if len(m.recentProjects) > 0 {
+		recentsLines = len(m.recentProjects) + 2 // header + items + blank line
+	}
 	// -2 borders, -1 breadcrumb, -1 hints, -1 search bar, -1 title
-	m.projectTree.SetSize(overlayWidth-2, overlayHeight-6)
+	m.projectTree.SetSize(overlayWidth-2, max(overlayHeight-6-recentsLines, 3))
 }
 
 func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
@@ -276,6 +300,71 @@ const (
 	focusDeleteConfirm
 )
 
+func (m *model) selectProject(projectPath string) {
+	m.addRecentProject(projectPath)
+	if m.reassigningEntry >= 0 {
+		entry := m.entries[m.reassigningEntry]
+		desc := entry.Description
+		if parts := strings.SplitN(desc, ": ", 2); len(parts) == 2 {
+			desc = parts[1]
+		}
+		newDescription := projectPath + desc
+		if err := timelog.EditEntry(m.timeLogFilePath, entry.LineNumber, entry.EndTime.Format(timelog.TimeLayout), newDescription); err != nil {
+			slog.Error("Failed to reassign project", "error", err)
+		}
+		m.reloadEntries()
+		m.reassigningEntry = -1
+		m.focus = focusTable
+	} else {
+		m.textInput.SetValue(projectPath)
+		m.focus = focusFooter
+	}
+	m.showProjectOverlay = false
+	m.projectTree.StopSearch()
+	m.searchInput.Reset()
+	m.searchInput.Blur()
+	m.inRecents = false
+}
+
+func (m *model) closeProjectOverlay() {
+	m.showProjectOverlay = false
+	m.projectTree.StopSearch()
+	m.searchInput.Reset()
+	m.searchInput.Blur()
+	m.inRecents = false
+	if m.reassigningEntry >= 0 {
+		m.reassigningEntry = -1
+		m.focus = focusTable
+	}
+}
+
+func (m *model) moveProjectCursorDown() {
+	if m.inRecents {
+		if m.recentCursor < len(m.recentProjects)-1 {
+			m.recentCursor++
+		} else {
+			// Move from recents into tree
+			m.inRecents = false
+		}
+	} else {
+		m.projectTree.MoveDown()
+	}
+}
+
+func (m *model) moveProjectCursorUp() {
+	if m.inRecents {
+		if m.recentCursor > 0 {
+			m.recentCursor--
+		}
+	} else if m.projectTree.Cursor == 0 && len(m.recentProjects) > 0 {
+		// Move from tree into recents
+		m.inRecents = true
+		m.recentCursor = len(m.recentProjects) - 1
+	} else {
+		m.projectTree.MoveUp()
+	}
+}
+
 func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 	// When searching, handle search-specific keys first
 	if m.projectTree.Searching {
@@ -288,7 +377,6 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 			m.searchInput.Blur()
 			return keyHandled
 		case "enter":
-			// Accept the filter and stop search mode (keep results)
 			m.projectTree.Searching = false
 			m.searchInput.Blur()
 			return keyHandled
@@ -300,7 +388,6 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 			}
 			return keyHandled
 		default:
-			// Forward to search input
 			var cmd tea.Cmd
 			m.searchInput, cmd = m.searchInput.Update(msg)
 			_ = cmd
@@ -313,58 +400,34 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 	case "ctrl+c":
 		return keyExit
 	case "j", "down":
-		m.projectTree.MoveDown()
+		m.moveProjectCursorDown()
 		return keyHandled
 	case "k", "up":
-		m.projectTree.MoveUp()
+		m.moveProjectCursorUp()
 		return keyHandled
 	case " ": // space
-		m.projectTree.Toggle()
+		if !m.inRecents {
+			m.projectTree.Toggle()
+		}
 		return keyHandled
 	case "/":
+		m.inRecents = false
 		m.projectTree.StartSearch()
 		m.searchInput.Reset()
 		m.searchInput.Focus()
 		return keyHandled
 	case "enter":
-		projectPath := m.projectTree.GetProjectPath()
-		if projectPath != "" {
-			if m.reassigningEntry >= 0 {
-				entry := m.entries[m.reassigningEntry]
-				// Extract description after ": " separator
-				desc := entry.Description
-				if parts := strings.SplitN(desc, ": ", 2); len(parts) == 2 {
-					desc = parts[1]
-				}
-				newDescription := projectPath + desc
-				if err := timelog.EditEntry(m.timeLogFilePath, entry.LineNumber, entry.EndTime.Format(timelog.TimeLayout), newDescription); err != nil {
-					slog.Error("Failed to reassign project", "error", err)
-				}
-				m.reloadEntries()
-				m.reassigningEntry = -1
-				m.showProjectOverlay = false
-				m.projectTree.StopSearch()
-				m.searchInput.Reset()
-				m.searchInput.Blur()
-				m.focus = focusTable
-			} else {
-				m.textInput.SetValue(projectPath)
-				m.showProjectOverlay = false
-				m.projectTree.StopSearch()
-				m.searchInput.Reset()
-				m.searchInput.Blur()
-				m.focus = focusFooter
+		if m.inRecents && m.recentCursor < len(m.recentProjects) {
+			m.selectProject(m.recentProjects[m.recentCursor])
+		} else {
+			projectPath := m.projectTree.GetProjectPath()
+			if projectPath != "" {
+				m.selectProject(projectPath)
 			}
 		}
+		return keyHandled
 	case "esc":
-		m.showProjectOverlay = false
-		m.projectTree.StopSearch()
-		m.searchInput.Reset()
-		m.searchInput.Blur()
-		if m.reassigningEntry >= 0 {
-			m.reassigningEntry = -1
-			m.focus = focusTable
-		}
+		m.closeProjectOverlay()
 		return keyHandled
 	}
 	return keyHandled
@@ -426,6 +489,8 @@ func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 		}
 		m.reassigningEntry = m.entryIndices[cursor]
 		m.showProjectOverlay = true
+		m.inRecents = len(m.recentProjects) > 0
+		m.recentCursor = 0
 		m.focus = focusProjectTree
 		return keyHandled
 	}
@@ -453,6 +518,8 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 	case "ctrl+p":
 		m.reassigningEntry = -1
 		m.showProjectOverlay = true
+		m.inRecents = len(m.recentProjects) > 0
+		m.recentCursor = 0
 		m.focus = focusProjectTree
 		return keyHandled
 	case "tab":
@@ -705,10 +772,38 @@ func (m model) View() string {
 	overlayWidth := max(30, min(m.width*50/100, 80))
 	overlayHeight := max(10, min(m.height*60/100, 30))
 
+	recentSelectedStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#3b4261")).
+		Foreground(lipgloss.Color("#c0caf5")).
+		Bold(true)
+	recentNormalStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#a9b1d6"))
+	recentHeaderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#565f89")).
+		Bold(true)
+
 	projectContent := func() string {
 		var parts []string
 		if m.projectTree.Searching {
 			parts = append(parts, "/ "+m.searchInput.View())
+		}
+		// Recent projects section
+		if len(m.recentProjects) > 0 && !m.projectTree.Searching {
+			parts = append(parts, recentHeaderStyle.Render("Recent"))
+			for i, path := range m.recentProjects {
+				// Display the path without trailing ": "
+				label := strings.TrimSuffix(path, ": ")
+				line := " " + label
+				if len(line) < overlayWidth-2 {
+					line += strings.Repeat(" ", overlayWidth-2-len(line))
+				}
+				if m.inRecents && i == m.recentCursor {
+					parts = append(parts, recentSelectedStyle.Render(line))
+				} else {
+					parts = append(parts, recentNormalStyle.Render(line))
+				}
+			}
+			parts = append(parts, "")
 		}
 		parts = append(parts, m.projectTree.GetBreadcrumb())
 		parts = append(parts, m.projectTree.View())
