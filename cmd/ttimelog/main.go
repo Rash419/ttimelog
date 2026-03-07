@@ -803,7 +803,8 @@ func (m model) View() string {
 					parts = append(parts, recentNormalStyle.Render(line))
 				}
 			}
-			parts = append(parts, "")
+			divider := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89")).Render(strings.Repeat("─", overlayWidth-2))
+			parts = append(parts, divider)
 		}
 		parts = append(parts, m.projectTree.View())
 		parts = append(parts, m.projectTree.GetHints())
