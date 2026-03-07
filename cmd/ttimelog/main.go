@@ -47,8 +47,10 @@ type model struct {
 	dailyTargetHours      float64
 	weeklyTargetHours     float64
 	entryIndices          []int
-	confirmDelete         bool
+	showDeleteConfirm     bool
+	deleteTargetEntry     int
 	editingEntry          int
+	reassigningEntry      int
 	statusMessage         string
 }
 
@@ -101,6 +103,8 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		weeklyTargetHours:     appConfig.Gtimelog.Hours * 5,
 		entryIndices:          entryIndices,
 		editingEntry:          -1,
+		deleteTargetEntry:     -1,
+		reassigningEntry:      -1,
 	}
 }
 
@@ -261,6 +265,7 @@ const (
 	focusTable
 	focusFooter
 	focusProjectTree
+	focusDeleteConfirm
 )
 
 func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
@@ -279,41 +284,73 @@ func (m *model) handleProjectTreeKeyMsg(msg tea.KeyMsg) keyResult {
 	case "enter":
 		projectPath := m.projectTree.GetProjectPath()
 		if projectPath != "" {
-			m.textInput.SetValue(projectPath)
-			m.showProjectOverlay = false
-			m.focus = focusFooter
+			if m.reassigningEntry >= 0 {
+				entry := m.entries[m.reassigningEntry]
+				// Extract description after ": " separator
+				desc := entry.Description
+				if parts := strings.SplitN(desc, ": ", 2); len(parts) == 2 {
+					desc = parts[1]
+				}
+				newDescription := projectPath + desc
+				if err := timelog.EditEntry(m.timeLogFilePath, entry.LineNumber, entry.EndTime.Format(timelog.TimeLayout), newDescription); err != nil {
+					slog.Error("Failed to reassign project", "error", err)
+				}
+				m.reloadEntries()
+				m.reassigningEntry = -1
+				m.showProjectOverlay = false
+				m.focus = focusTable
+			} else {
+				m.textInput.SetValue(projectPath)
+				m.showProjectOverlay = false
+				m.focus = focusFooter
+			}
 		}
 	case "esc":
 		m.showProjectOverlay = false
+		if m.reassigningEntry >= 0 {
+			m.reassigningEntry = -1
+			m.focus = focusTable
+		}
 		return keyHandled
 	}
 	return keyHandled
 }
 
-func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
-	if m.confirmDelete {
-		if msg.String() == "y" {
-			cursor := m.taskTable.Cursor()
-			if cursor >= 0 && cursor < len(m.entryIndices) {
-				entry := m.entries[m.entryIndices[cursor]]
-				if err := timelog.DeleteEntry(m.timeLogFilePath, entry.LineNumber); err != nil {
-					slog.Error("Failed to delete entry", "error", err)
-				}
-				m.reloadEntries()
+func (m *model) handleDeleteConfirmKeyMsg(msg tea.KeyMsg) keyResult {
+	switch msg.String() {
+	case "y":
+		if m.deleteTargetEntry >= 0 && m.deleteTargetEntry < len(m.entries) {
+			entry := m.entries[m.deleteTargetEntry]
+			if err := timelog.DeleteEntry(m.timeLogFilePath, entry.LineNumber); err != nil {
+				slog.Error("Failed to delete entry", "error", err)
 			}
+			m.reloadEntries()
 		}
-		m.confirmDelete = false
-		m.statusMessage = ""
+		m.showDeleteConfirm = false
+		m.deleteTargetEntry = -1
+		m.focus = focusTable
 		return keyHandled
+	case "n", "esc":
+		m.showDeleteConfirm = false
+		m.deleteTargetEntry = -1
+		m.focus = focusTable
+		return keyHandled
+	case "ctrl+c":
+		return keyExit
 	}
+	return keyHandled
+}
 
+func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 	switch msg.String() {
 	case "d":
-		if len(m.entryIndices) == 0 {
+		cursor := m.taskTable.Cursor()
+		if cursor < 0 || cursor >= len(m.entryIndices) {
 			return keyHandled
 		}
-		m.confirmDelete = true
-		m.statusMessage = "Delete? (y/n)"
+		m.deleteTargetEntry = m.entryIndices[cursor]
+		m.showDeleteConfirm = true
+		m.focus = focusDeleteConfirm
 		return keyHandled
 	case "e":
 		cursor := m.taskTable.Cursor()
@@ -327,6 +364,15 @@ func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 		m.textInput.Focus()
 		m.taskTable.Blur()
 		m.focus = focusFooter
+		return keyHandled
+	case "p":
+		cursor := m.taskTable.Cursor()
+		if cursor < 0 || cursor >= len(m.entryIndices) {
+			return keyHandled
+		}
+		m.reassigningEntry = m.entryIndices[cursor]
+		m.showProjectOverlay = true
+		m.focus = focusProjectTree
 		return keyHandled
 	}
 	return keyIgnored
@@ -351,27 +397,28 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		}
 		return keyIgnored
 	case "ctrl+p":
+		m.reassigningEntry = -1
 		m.showProjectOverlay = true
 		m.focus = focusProjectTree
 		return keyHandled
-	case "alt+1", "alt+2", "alt+3", "alt+4":
-		switch msg.String() {
-		case "alt+1":
-			m.focus = focusHeader
-			m.textInput.Blur()
-			m.taskTable.Blur()
-		case "alt+2":
-			m.focus = focusStats
-			m.textInput.Blur()
-			m.taskTable.Blur()
-		case "alt+3":
-			m.focus = focusTable
-			m.textInput.Blur()
-			m.taskTable.Focus()
-		case "alt+4":
-			m.focus = focusFooter
-			m.taskTable.Blur()
+	case "tab":
+		m.focus = (m.focus + 1) % 4
+		m.textInput.Blur()
+		m.taskTable.Blur()
+		if m.focus == focusFooter {
 			m.textInput.Focus()
+		} else if m.focus == focusTable {
+			m.taskTable.Focus()
+		}
+		return keyHandled
+	case "shift+tab":
+		m.focus = (m.focus + 3) % 4
+		m.textInput.Blur()
+		m.taskTable.Blur()
+		if m.focus == focusFooter {
+			m.textInput.Focus()
+		} else if m.focus == focusTable {
+			m.taskTable.Focus()
 		}
 		return keyHandled
 	}
@@ -393,7 +440,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// TODO: handle file watch error
 	case tea.KeyMsg:
 		var keyResult keyResult
-		if m.showProjectOverlay {
+		if m.showDeleteConfirm {
+			keyResult = m.handleDeleteConfirmKeyMsg(msg)
+		} else if m.showProjectOverlay {
 			keyResult = m.handleProjectTreeKeyMsg(msg)
 		} else {
 			keyResult = m.handleKeyMsg(msg)
@@ -536,14 +585,14 @@ func (m model) View() string {
 
 	headerPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[M-1]",
+		Title:   "Date",
 		View:    createHeaderContent,
 		Focused: m.focus == focusHeader,
 	}
 
 	statsPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[M-2]",
+		Title:   "Stats",
 		View:    m.createStatsContent,
 		Focused: m.focus == focusStats,
 	}
@@ -553,15 +602,15 @@ func (m model) View() string {
 
 	bodyPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   "[M-3]",
+		Title:   "Entries",
 		View:    m.taskTable.View,
 		Height:  bodyHeight,
 		Focused: m.focus == focusTable,
 	}
 
-	footerTitle := "[M-4]"
+	footerTitle := "Input"
 	if m.statusMessage != "" {
-		footerTitle = "[M-4] " + m.statusMessage
+		footerTitle = "Input" + " " + m.statusMessage
 	}
 
 	footerPane := layout.Pane{
@@ -577,6 +626,23 @@ func (m model) View() string {
 		bodyPane.Render(),
 		footerPane.Render(),
 	)
+
+	if m.showDeleteConfirm && m.deleteTargetEntry >= 0 && m.deleteTargetEntry < len(m.entries) {
+		entry := m.entries[m.deleteTargetEntry]
+		content := fmt.Sprintf(
+			"%s\n%s\n\nPress y to confirm, n or esc to cancel",
+			entry.EndTime.Format(timelog.TimeLayout),
+			entry.Description,
+		)
+		deletePane := layout.Pane{
+			Title:   "Confirm Delete",
+			Width:   50,
+			Height:  8,
+			View:    func() string { return content },
+			Focused: true,
+		}
+		return overlay.Composite(deletePane.Render(), mainView, overlay.Center, overlay.Center, 0, 0)
+	}
 
 	if !m.showProjectOverlay {
 		return mainView
