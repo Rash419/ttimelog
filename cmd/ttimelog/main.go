@@ -239,8 +239,8 @@ func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
 	if len(m.recentProjects) > 0 {
 		recentsLines = len(m.recentProjects) + 2 // header + items + blank line
 	}
-	// -2 borders, -1 breadcrumb, -1 hints, -1 search bar, -1 title
-	m.projectTree.SetSize(overlayWidth-2, max(overlayHeight-6-recentsLines, 3))
+	// -2 borders, -1 hints, -1 search bar, -1 title
+	m.projectTree.SetSize(overlayWidth-2, max(overlayHeight-5-recentsLines, 3))
 }
 
 func (m *model) updateComponents(msg tea.Msg) []tea.Cmd {
@@ -805,7 +805,6 @@ func (m model) View() string {
 			}
 			parts = append(parts, "")
 		}
-		parts = append(parts, m.projectTree.GetBreadcrumb())
 		parts = append(parts, m.projectTree.View())
 		parts = append(parts, m.projectTree.GetHints())
 		return strings.Join(parts, "\n")
