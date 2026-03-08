@@ -26,4 +26,5 @@ const (
 	focusFooter
 	focusProjectTree
 	focusDeleteConfirm
+	focusReport
 )

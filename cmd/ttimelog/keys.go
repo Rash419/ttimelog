@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/Rash419/ttimelog/internal/chrono"
+	"github.com/Rash419/ttimelog/internal/report"
 	"github.com/Rash419/ttimelog/internal/timelog"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -176,6 +178,24 @@ func (m *model) handleDeleteConfirmKeyMsg(msg tea.KeyMsg) keyResult {
 	return keyHandled
 }
 
+func (m *model) handleReportKeyMsg(msg tea.KeyMsg) keyResult {
+	switch msg.String() {
+	case "esc", "q":
+		m.showReportOverlay = false
+		m.focus = focusHeader
+		return keyHandled
+	case "ctrl+c":
+		return keyExit
+	case "j", "down":
+		m.reportViewport.LineDown(1)
+		return keyHandled
+	case "k", "up":
+		m.reportViewport.LineUp(1)
+		return keyHandled
+	}
+	return keyHandled
+}
+
 func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 	switch msg.String() {
 	case "d":
@@ -270,6 +290,15 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		return keyHandled, tea.ExecProcess(c, func(err error) tea.Msg {
 			return editorReturnMsg{err: err}
 		})
+	case "alt+r":
+		r := report.GenerateDailyReport(m.entries, m.viewDate, m.virtualMidnight)
+		m.reportContent = report.FormatReport(r)
+		vp := viewport.New(max(56, min(m.width*70/100-4, 96)), max(10, min(m.height*70/100-4, 36)))
+		vp.SetContent(m.reportContent)
+		m.reportViewport = vp
+		m.showReportOverlay = true
+		m.focus = focusReport
+		return keyHandled, nil
 	case "tab":
 		m.historyActive = false
 		m.focus = (m.focus + 1) % 4

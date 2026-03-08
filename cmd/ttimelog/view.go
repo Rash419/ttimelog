@@ -192,6 +192,17 @@ func (m model) View() string {
 		m.createStatusBar(availableWidth),
 	)
 
+	if m.showReportOverlay {
+		reportPane := layout.Pane{
+			Title:   "Report",
+			Width:   max(60, min(m.width*70/100, 100)),
+			Height:  max(15, min(m.height*70/100, 40)),
+			View:    func() string { return m.reportViewport.View() },
+			Focused: true,
+		}
+		return overlay.Composite(reportPane.Render(), mainView, overlay.Center, overlay.Center, 0, 0)
+	}
+
 	if m.showDeleteConfirm && m.deleteTargetEntry >= 0 && m.deleteTargetEntry < len(m.entries) {
 		entry := m.entries[m.deleteTargetEntry]
 		content := fmt.Sprintf(
@@ -272,7 +283,7 @@ func (m model) createStatusBar(width int) string {
 	var hints string
 	switch m.focus {
 	case focusHeader:
-		hints = "h/l: Prev/Next day | [/]: Prev/Next week | alt+o: Editor | tab: Switch"
+		hints = "h/l: Prev/Next day | [/]: Prev/Next week | alt+o: Editor | alt+r: Report | tab: Switch"
 	case focusFooter:
 		hints = "↑/↓: History | alt+s: Submit | ctrl+p: Projects | tab: Switch"
 	case focusTable:

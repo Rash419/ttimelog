@@ -17,6 +17,7 @@ import (
 	"github.com/Rash419/ttimelog/internal/watcher"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -61,6 +62,11 @@ type model struct {
 	historyCursor   int
 	historyActive   bool
 	historyInput    string // original input before history browsing
+
+	// Report overlay
+	showReportOverlay bool
+	reportContent     string
+	reportViewport    viewport.Model
 }
 
 const (
@@ -174,7 +180,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		var kr keyResult
 		var cmd tea.Cmd
-		if m.showDeleteConfirm {
+		if m.showReportOverlay {
+			kr = m.handleReportKeyMsg(msg)
+		} else if m.showDeleteConfirm {
 			kr = m.handleDeleteConfirmKeyMsg(msg)
 		} else if m.showProjectOverlay {
 			kr = m.handleProjectTreeKeyMsg(msg)
