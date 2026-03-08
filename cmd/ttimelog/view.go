@@ -14,11 +14,16 @@ import (
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
-func createHeaderContent() string {
-	timeNow := time.Now()
-	_, week := timeNow.ISOWeek()
-	dateAndDay := timeNow.Format("January, 02-01-2006")
-	return fmt.Sprintf("%s (Week %d)", dateAndDay, week)
+func (m model) createHeaderContent() string {
+	_, week := m.viewDate.ISOWeek()
+	dateAndDay := m.viewDate.Format("January, 02-01-2006")
+	today := time.Now()
+	isToday := m.viewDate.Year() == today.Year() && m.viewDate.YearDay() == today.YearDay()
+	nav := "◀ h/l ▶"
+	if isToday {
+		nav = "◀ h"
+	}
+	return fmt.Sprintf("%s (Week %d)  %s", dateAndDay, week, nav)
 }
 
 func (m model) createStatsContent() string {
@@ -27,26 +32,45 @@ func (m model) createStatsContent() string {
 
 	colStyle := lipgloss.NewStyle().Width(colWidth).Align(lipgloss.Left)
 
-	dailyPercent := m.statsCollection.Daily.Work.Hours() / m.dailyTargetHours
-	weeklyPercent := m.statsCollection.Weekly.Work.Hours() / m.weeklyTargetHours
+	stats := m.viewDateStats()
+
+	dailyPercent := stats.Daily.Work.Hours() / m.dailyTargetHours
+	weeklyPercent := stats.Weekly.Work.Hours() / m.weeklyTargetHours
 
 	dailyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 	weeklyBar := progress.New(progress.WithoutPercentage(), progress.WithWidth(progressBarWidth))
 
-	leaveTime := timelog.FormatTime(m.statsCollection.ArrivedTime.Add(time.Duration(m.dailyTargetHours * float64(time.Hour))))
+	leaveTime := timelog.FormatTime(stats.ArrivedTime.Add(time.Duration(m.dailyTargetHours * float64(time.Hour))))
 
-	timeRemaining := m.dailyTargetHours - m.statsCollection.Daily.Work.Hours()
+	timeRemaining := m.dailyTargetHours - stats.Daily.Work.Hours()
 	timeRemainingDuration := time.Duration(timeRemaining * float64(time.Hour))
 
-	dailyStat := colStyle.Render("TODAY " + dailyBar.ViewAs(dailyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Daily.Work) + "\nLeft: " + leaveTime + " → " + timelog.FormatStatDuration(timeRemainingDuration) + ", Slack: " + timelog.FormatStatDuration(m.statsCollection.Daily.Slack))
-	weeklyStat := colStyle.Render("WEEK " + weeklyBar.ViewAs(weeklyPercent) + " " + timelog.FormatStatDuration(m.statsCollection.Weekly.Work) + "\nSlack: " + timelog.FormatStatDuration(m.statsCollection.Weekly.Slack))
-	monthlyStat := colStyle.Render("MONTH " + timelog.FormatStatDuration(m.statsCollection.Monthly.Work))
+	dailyLabel := "TODAY"
+	if !m.isViewingToday() {
+		dailyLabel = "DAY"
+	}
+
+	dailyStat := colStyle.Render(dailyLabel + " " + dailyBar.ViewAs(dailyPercent) + " " + timelog.FormatStatDuration(stats.Daily.Work) + "\nLeft: " + leaveTime + " → " + timelog.FormatStatDuration(timeRemainingDuration) + ", Slack: " + timelog.FormatStatDuration(stats.Daily.Slack))
+	weeklyStat := colStyle.Render("WEEK " + weeklyBar.ViewAs(weeklyPercent) + " " + timelog.FormatStatDuration(stats.Weekly.Work) + "\nSlack: " + timelog.FormatStatDuration(stats.Weekly.Slack))
+	monthlyStat := colStyle.Render("MONTH " + timelog.FormatStatDuration(stats.Monthly.Work))
 
 	divider := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).PaddingRight(1).
 		Render(strings.TrimRight(strings.Repeat("│\n", 2), "\n"))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, dailyStat, divider, weeklyStat, divider, monthlyStat)
+}
+
+func (m model) isViewingToday() bool {
+	now := time.Now()
+	return m.viewDate.Year() == now.Year() && m.viewDate.YearDay() == now.YearDay()
+}
+
+func (m model) viewDateStats() timelog.StatsCollection {
+	if m.isViewingToday() {
+		return m.statsCollection
+	}
+	return timelog.StatsCollectionForDate(m.entries, m.viewDate, m.virtualMidnight)
 }
 
 func (m model) createFooterContent() string {
@@ -75,23 +99,23 @@ func getTableCols(width int) []table.Column {
 	return columns
 }
 
-func getTableRows(entries []timelog.Entry) ([]table.Row, []int) {
+func getTableRows(entries []timelog.Entry, viewDate time.Time, virtualMidnight time.Duration) ([]table.Row, []int) {
 	rows := make([]table.Row, 0)
 	indices := make([]int, 0)
+
+	targetDate := time.Date(viewDate.Year(), viewDate.Month(), viewDate.Day(), 0, 0, 0, 0, viewDate.Location())
 
 	var lastEndTime time.Time
 	for i, entry := range entries {
 		startTime := lastEndTime
-		entryDate := entry.EndTime.Format("2006-01-02")
-		currentDate := time.Now().Format("2006-01-02")
 
-		// only show entries for today
-		if entryDate != currentDate {
+		vd := timelog.VirtualDate(entry.EndTime, virtualMidnight)
+		if vd.Year() != targetDate.Year() || vd.Month() != targetDate.Month() || vd.Day() != targetDate.Day() {
 			lastEndTime = entry.EndTime
 			continue
 		}
 
-		if i == 0 || lastEndTime.Format("2006-01-02") != entryDate {
+		if i == 0 || !timelog.VirtualDate(lastEndTime, virtualMidnight).Equal(vd) {
 			startTime = entry.EndTime
 		}
 
@@ -104,9 +128,9 @@ func getTableRows(entries []timelog.Entry) ([]table.Row, []int) {
 	return rows, indices
 }
 
-func createBodyContent(width, height int, entries []timelog.Entry) (table.Model, []int) {
+func createBodyContent(width, height int, entries []timelog.Entry, viewDate time.Time, virtualMidnight time.Duration) (table.Model, []int) {
 	cols := getTableCols(width)
-	rows, indices := getTableRows(entries)
+	rows, indices := getTableRows(entries, viewDate, virtualMidnight)
 
 	km := table.DefaultKeyMap()
 	km.HalfPageDown = key.NewBinding(
@@ -131,7 +155,7 @@ func (m model) View() string {
 	headerPane := layout.Pane{
 		Width:   availableWidth,
 		Title:   "Date",
-		View:    createHeaderContent,
+		View:    m.createHeaderContent,
 		Focused: m.focus == focusHeader,
 	}
 
@@ -247,6 +271,8 @@ func (m model) createStatusBar(width int) string {
 
 	var hints string
 	switch m.focus {
+	case focusHeader:
+		hints = "h/l: Prev/Next day | [/]: Prev/Next week | tab: Switch"
 	case focusFooter:
 		hints = "alt+s: Submit | ctrl+p: Projects | tab: Switch"
 	case focusTable:

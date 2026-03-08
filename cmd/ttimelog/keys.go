@@ -39,7 +39,7 @@ func (m *model) handleInput() {
 		slog.Error("Failed to add entry with description", "error", newEntry.Description)
 	}
 
-	rows, indices := getTableRows(m.entries)
+	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
 	m.taskTable.SetRows(rows)
 	m.entryIndices = indices
 	m.scrollToBottom = true
@@ -266,6 +266,38 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 			m.taskTable.Focus()
 		}
 		return keyHandled, nil
+	}
+
+	// Date navigation when header focused
+	if m.focus == focusHeader {
+		switch msg.String() {
+		case "left", "h":
+			m.viewDate = m.viewDate.AddDate(0, 0, -1)
+			m.refreshViewForDate()
+			return keyHandled, nil
+		case "right", "l":
+			now := time.Now()
+			next := m.viewDate.AddDate(0, 0, 1)
+			if next.Year() < now.Year() || (next.Year() == now.Year() && next.YearDay() <= now.YearDay()) {
+				m.viewDate = next
+				m.refreshViewForDate()
+			}
+			return keyHandled, nil
+		case "[":
+			m.viewDate = m.viewDate.AddDate(0, 0, -7)
+			m.refreshViewForDate()
+			return keyHandled, nil
+		case "]":
+			now := time.Now()
+			next := m.viewDate.AddDate(0, 0, 7)
+			if next.Year() < now.Year() || (next.Year() == now.Year() && next.YearDay() <= now.YearDay()) {
+				m.viewDate = next
+			} else {
+				m.viewDate = now
+			}
+			m.refreshViewForDate()
+			return keyHandled, nil
+		}
 	}
 
 	if m.focus == focusTable {

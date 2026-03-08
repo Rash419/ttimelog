@@ -70,6 +70,91 @@ func VirtualDate(t time.Time, virtualMidnight time.Duration) time.Time {
 	return midnight
 }
 
+// FilterEntriesForDate returns entries whose virtual date matches the given date.
+func FilterEntriesForDate(entries []Entry, date time.Time, virtualMidnight time.Duration) []Entry {
+	targetDate := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	var result []Entry
+	for _, e := range entries {
+		vd := VirtualDate(e.EndTime, virtualMidnight)
+		if vd.Year() == targetDate.Year() && vd.Month() == targetDate.Month() && vd.Day() == targetDate.Day() {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// StatsForDate computes work/slack stats for a specific date.
+func StatsForDate(entries []Entry, date time.Time, virtualMidnight time.Duration) Stats {
+	filtered := FilterEntriesForDate(entries, date, virtualMidnight)
+	var stats Stats
+	for _, e := range filtered {
+		if strings.Contains(e.Description, "**") {
+			stats.Slack += e.Duration
+		} else {
+			stats.Work += e.Duration
+		}
+	}
+	return stats
+}
+
+// StatsForWeek computes aggregate stats for the ISO week containing date.
+func StatsForWeek(entries []Entry, date time.Time, virtualMidnight time.Duration) Stats {
+	targetYear, targetWeek := date.ISOWeek()
+	var stats Stats
+	for _, e := range entries {
+		vd := VirtualDate(e.EndTime, virtualMidnight)
+		y, w := vd.ISOWeek()
+		if y == targetYear && w == targetWeek {
+			if strings.Contains(e.Description, "**") {
+				stats.Slack += e.Duration
+			} else {
+				stats.Work += e.Duration
+			}
+		}
+	}
+	return stats
+}
+
+// StatsForMonth computes aggregate stats for the month containing date.
+func StatsForMonth(entries []Entry, date time.Time, virtualMidnight time.Duration) Stats {
+	var stats Stats
+	for _, e := range entries {
+		vd := VirtualDate(e.EndTime, virtualMidnight)
+		if vd.Year() == date.Year() && vd.Month() == date.Month() {
+			if strings.Contains(e.Description, "**") {
+				stats.Slack += e.Duration
+			} else {
+				stats.Work += e.Duration
+			}
+		}
+	}
+	return stats
+}
+
+// StatsCollectionForDate computes a full StatsCollection for a given view date.
+func StatsCollectionForDate(entries []Entry, date time.Time, virtualMidnight time.Duration) StatsCollection {
+	daily := StatsForDate(entries, date, virtualMidnight)
+	weekly := StatsForWeek(entries, date, virtualMidnight)
+	monthly := StatsForMonth(entries, date, virtualMidnight)
+
+	// Find arrived time for the given date
+	var arrivedTime time.Time
+	filtered := FilterEntriesForDate(entries, date, virtualMidnight)
+	for _, e := range filtered {
+		if IsArrivedMessage(e.Description) {
+			arrivedTime = e.EndTime
+			break
+		}
+	}
+
+	return StatsCollection{
+		Daily:       daily,
+		Weekly:      weekly,
+		Monthly:     monthly,
+		ArrivedTime: arrivedTime,
+	}
+}
+
 func NewEntry(endTime time.Time, description string, duration time.Duration) Entry {
 	today, currentWeek, currentMonth := GetEntryState(endTime)
 	return Entry{

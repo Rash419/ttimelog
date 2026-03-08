@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/Rash419/ttimelog/internal/chrono"
 	"github.com/Rash419/ttimelog/internal/config"
@@ -50,6 +51,10 @@ type model struct {
 	recentCursor          int
 	inRecents             bool
 	appConfig             *config.AppConfig
+
+	// Date navigation
+	viewDate        time.Time
+	virtualMidnight time.Duration
 }
 
 const (
@@ -76,7 +81,13 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		slog.Error("Failed to load entries", "error", err)
 	}
 
-	taskTable, entryIndices := createBodyContent(0, 0, entries)
+	vm, err := timelog.ParseVirtualMidnight(appConfig.Gtimelog.VirtualMidnight)
+	if err != nil {
+		slog.Error("Failed to parse virtual_midnight, using default", "error", err)
+		vm = 2 * time.Hour
+	}
+
+	taskTable, entryIndices := createBodyContent(0, 0, entries, time.Now(), vm)
 
 	projectListFile := filepath.Join(appConfig.TimeLogDirPath, config.ProjectListFile)
 	rootNode, err := chrono.ParseProjectList(projectListFile)
@@ -111,6 +122,8 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		reassigningEntry:      -1,
 		searchInput:           searchInput,
 		appConfig:             appConfig,
+		viewDate:              time.Now(),
+		virtualMidnight:       vm,
 	}
 }
 

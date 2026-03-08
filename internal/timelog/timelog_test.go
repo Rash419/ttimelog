@@ -211,6 +211,83 @@ func TestParseVirtualMidnight(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// --- Feature 1: Date Navigation Tests ---
+
+func TestStatsForDate(t *testing.T) {
+	entries := []Entry{
+		{EndTime: time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC), Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: time.Date(2026, 3, 7, 11, 0, 0, 0, time.UTC), Description: "**slack", Duration: 30 * time.Minute},
+		{EndTime: time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC), Description: "task B", Duration: 2 * time.Hour},
+	}
+
+	stats := StatsForDate(entries, time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC), 0)
+	assert.Equal(t, 1*time.Hour, stats.Work)
+	assert.Equal(t, 30*time.Minute, stats.Slack)
+}
+
+func TestStatsForDateNoEntries(t *testing.T) {
+	entries := []Entry{
+		{EndTime: time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC), Description: "task A", Duration: 1 * time.Hour},
+	}
+	stats := StatsForDate(entries, time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC), 0)
+	assert.Equal(t, time.Duration(0), stats.Work)
+	assert.Equal(t, time.Duration(0), stats.Slack)
+}
+
+func TestStatsForWeek(t *testing.T) {
+	// 2026-03-02 is Monday, 2026-03-08 is Sunday of the same ISO week
+	entries := []Entry{
+		{EndTime: time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC), Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: time.Date(2026, 3, 5, 10, 0, 0, 0, time.UTC), Description: "task B", Duration: 2 * time.Hour},
+		{EndTime: time.Date(2026, 3, 9, 10, 0, 0, 0, time.UTC), Description: "task C", Duration: 3 * time.Hour}, // next week
+	}
+
+	stats := StatsForWeek(entries, time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC), 0)
+	assert.Equal(t, 3*time.Hour, stats.Work)
+}
+
+func TestStatsForMonth(t *testing.T) {
+	entries := []Entry{
+		{EndTime: time.Date(2026, 2, 28, 10, 0, 0, 0, time.UTC), Description: "Feb task", Duration: 1 * time.Hour},
+		{EndTime: time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC), Description: "Mar task A", Duration: 2 * time.Hour},
+		{EndTime: time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC), Description: "Mar task B", Duration: 3 * time.Hour},
+	}
+
+	stats := StatsForMonth(entries, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), 0)
+	assert.Equal(t, 5*time.Hour, stats.Work)
+}
+
+func TestFilterEntriesForDate(t *testing.T) {
+	entries := []Entry{
+		{EndTime: time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC), Description: "task A"},
+		{EndTime: time.Date(2026, 3, 7, 14, 0, 0, 0, time.UTC), Description: "task B"},
+		{EndTime: time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC), Description: "task C"},
+	}
+
+	filtered := FilterEntriesForDate(entries, time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC), 0)
+	assert.Len(t, filtered, 2)
+	assert.Equal(t, "task A", filtered[0].Description)
+	assert.Equal(t, "task B", filtered[1].Description)
+}
+
+func TestFilterEntriesForDateWithVirtualMidnight(t *testing.T) {
+	vm := 2 * time.Hour
+	entries := []Entry{
+		{EndTime: time.Date(2026, 3, 7, 23, 0, 0, 0, time.UTC), Description: "late night work"},
+		{EndTime: time.Date(2026, 3, 8, 1, 30, 0, 0, time.UTC), Description: "past midnight work"},  // before VM → belongs to Mar 7
+		{EndTime: time.Date(2026, 3, 8, 2, 30, 0, 0, time.UTC), Description: "after VM work"},        // after VM → belongs to Mar 8
+	}
+
+	filtered := FilterEntriesForDate(entries, time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC), vm)
+	assert.Len(t, filtered, 2)
+	assert.Equal(t, "late night work", filtered[0].Description)
+	assert.Equal(t, "past midnight work", filtered[1].Description)
+
+	filtered = FilterEntriesForDate(entries, time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC), vm)
+	assert.Len(t, filtered, 1)
+	assert.Equal(t, "after VM work", filtered[0].Description)
+}
+
 func createTempFile(t *testing.T, content string) string {
 	t.Helper()
 	tmpFile, err := os.CreateTemp(t.TempDir(), "ttimelog-*.txt")

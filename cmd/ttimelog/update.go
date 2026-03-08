@@ -18,9 +18,16 @@ func (m *model) reloadEntries() {
 	m.statsCollection = statsCollections
 	m.handledArrivedMessage = handledArrivedMessage
 
-	rows, indices := getTableRows(m.entries)
+	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
 	m.taskTable.SetRows(rows)
 	m.entryIndices = indices
+}
+
+func (m *model) refreshViewForDate() {
+	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
+	m.taskTable.SetRows(rows)
+	m.entryIndices = indices
+	m.scrollToBottom = true
 }
 
 func (m *model) handleWindowSize(msg tea.WindowSizeMsg) {
@@ -80,7 +87,7 @@ func (m *model) handleFileChangedMsg() {
 	m.statsCollection = statsCollections
 	m.handledArrivedMessage = handledArrivedMessage
 
-	rows, indices := getTableRows(m.entries)
+	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
 	m.taskTable.SetRows(rows)
 	m.entryIndices = indices
 	m.scrollToBottom = true
