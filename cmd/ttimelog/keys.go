@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -298,6 +299,19 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		m.reportViewport = vp
 		m.showReportOverlay = true
 		m.focus = focusReport
+		return keyHandled, nil
+	case "alt+e":
+		csvContent := report.ExportDailyCSV(m.entries, m.viewDate, m.virtualMidnight)
+		reportsDir := filepath.Join(m.appConfig.TimeLogDirPath, "reports")
+		filename := fmt.Sprintf("ttimelog-%s.csv", m.viewDate.Format("2006-01-02"))
+		csvPath := filepath.Join(reportsDir, filename)
+		if err := report.WriteCSV(csvContent, csvPath); err != nil {
+			m.statusMessage = fmt.Sprintf("CSV export failed: %s", err)
+			m.statusKind = statusError
+		} else {
+			m.statusMessage = fmt.Sprintf("Exported to %s", csvPath)
+			m.statusKind = statusSuccess
+		}
 		return keyHandled, nil
 	case "tab":
 		m.historyActive = false

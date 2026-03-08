@@ -283,7 +283,7 @@ func (m model) createStatusBar(width int) string {
 	var hints string
 	switch m.focus {
 	case focusHeader:
-		hints = "h/l: Prev/Next day | [/]: Prev/Next week | alt+o: Editor | alt+r: Report | tab: Switch"
+		hints = "h/l: Prev/Next day | [/]: Prev/Next week | alt+o: Editor | alt+r: Report | alt+e: CSV | tab: Switch"
 	case focusFooter:
 		hints = "↑/↓: History | alt+s: Submit | ctrl+p: Projects | tab: Switch"
 	case focusTable:
