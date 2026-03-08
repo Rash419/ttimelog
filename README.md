@@ -26,35 +26,70 @@ go install github.com/Rash419/ttimelog/cmd/ttimelog@latest
 
 ### Keybindings
 
+#### General
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Cycle focus between panes |
+| `Ctrl+P` | Open project tree |
+| `Alt+S` | Submit timesheet to Chronophage |
+| `Ctrl+C` | Quit |
+
+#### Input Pane
+
 | Key | Action |
 |-----|--------|
 | `Enter` | Submit task |
-| `Esc` | Toggle focus |
-| `Ctrl+C` | Quit |
+| `Esc` | Cancel editing |
+
+#### Table Pane
+
+| Key | Action |
+|-----|--------|
+| `e` | Edit selected entry |
+| `d` | Delete selected entry |
+| `p` | Reassign project for selected entry |
+
+#### Project Tree
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or `↑` / `↓` | Navigate |
+| `Space` | Expand/collapse node |
+| `/` | Search projects |
+| `Enter` | Select project |
+| `Esc` | Close overlay |
 
 ### Task Markers
 
 - `**arrived`: Mark work start time
 - `**task description`: Mark as slack/break time
 
+### Status Bar
+
+A bottom status bar (lazygit-style) shows context-sensitive keyboard shortcuts on the left and transient status messages on the right, color-coded by type (yellow = in progress, green = success, red = error).
+
 ## Data Location
 
 - `~/.ttimelog/ttimelog.txt`: Timelog entries
+- `~/.ttimelog/ttimelogrc`: Configuration file (INI format)
 - `~/.ttimelog/ttimelog.log`: Application logs
 
 ## Todo
 
 ### Core Features
 
-- [ ] Configurable target hours (daily/weekly)
-- [ ] Edit/delete existing entries
+- [x] Configurable target hours (daily/weekly)
+- [x] Edit/delete existing entries
+- [x] Keyboard navigation in table
+- [x] Project tree with search and recent projects
+- [x] Bottom status bar with shortcut hints
 - [ ] Reports/export functionality
-- [ ] Keyboard navigation in table
 - [ ] Theme support
 
 ### Chronophage Integration
 
-- [ ] Import/export timesheets in chronophage-compatible format
+- [x] Submit timesheet via `Alt+S`
 - [ ] Submit weekly status reports with email
 
 ## License
