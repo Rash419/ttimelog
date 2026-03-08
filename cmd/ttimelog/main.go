@@ -75,6 +75,7 @@ type (
 )
 
 type shutdownCompleteMsg struct{}
+type editorReturnMsg struct{ err error }
 
 func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, appConfig *config.AppConfig) model {
 	txtInput := textinput.New()
@@ -159,6 +160,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Timesheet submitted"
 			m.statusKind = statusSuccess
 		}
+		return m, nil
+	case editorReturnMsg:
+		if msg.err != nil {
+			m.statusMessage = fmt.Sprintf("Editor error: %s", msg.err)
+			m.statusKind = statusError
+		} else {
+			m.statusMessage = "Editor closed"
+			m.statusKind = statusInfo
+		}
+		m.reloadEntries()
 		return m, nil
 	case tea.KeyMsg:
 		var kr keyResult

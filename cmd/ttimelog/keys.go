@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -256,6 +258,18 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 			return submitResultMsg{err: chrono.SubmitTimesheet(entries, appCfg)}
 		}
 		return keyHandled, cmd
+	case "alt+o":
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vim"
+			if _, err := exec.LookPath("vim"); err != nil {
+				editor = "nano"
+			}
+		}
+		c := exec.Command(editor, m.timeLogFilePath)
+		return keyHandled, tea.ExecProcess(c, func(err error) tea.Msg {
+			return editorReturnMsg{err: err}
+		})
 	case "tab":
 		m.historyActive = false
 		m.focus = (m.focus + 1) % 4
