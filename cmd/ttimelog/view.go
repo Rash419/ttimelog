@@ -153,14 +153,9 @@ func (m model) View() string {
 		Focused: m.focus == focusTable,
 	}
 
-	footerTitle := "Input"
-	if m.statusMessage != "" {
-		footerTitle = "Input" + " " + m.statusMessage
-	}
-
 	footerPane := layout.Pane{
 		Width:   availableWidth,
-		Title:   footerTitle,
+		Title:   "Input",
 		View:    m.createFooterContent,
 		Focused: m.focus == focusFooter,
 	}
@@ -170,6 +165,7 @@ func (m model) View() string {
 		statsPane.Render(),
 		bodyPane.Render(),
 		footerPane.Render(),
+		m.createStatusBar(availableWidth),
 	)
 
 	if m.showDeleteConfirm && m.deleteTargetEntry >= 0 && m.deleteTargetEntry < len(m.entries) {
@@ -244,4 +240,42 @@ func (m model) View() string {
 	}
 
 	return overlay.Composite(projectPane.Render(), mainView, overlay.Center, overlay.Center, 0, 0)
+}
+
+func (m model) createStatusBar(width int) string {
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	var hints string
+	switch m.focus {
+	case focusFooter:
+		hints = "alt+s: Submit | ctrl+p: Projects | tab: Switch"
+	case focusTable:
+		hints = "e: Edit | d: Delete | p: Project | tab: Switch"
+	default:
+		hints = "tab: Switch"
+	}
+
+	left := dimStyle.Render(" " + hints)
+
+	var right string
+	if m.statusMessage != "" {
+		var color lipgloss.Color
+		switch m.statusKind {
+		case statusSuccess:
+			color = lipgloss.Color("#9ece6a")
+		case statusError:
+			color = lipgloss.Color("#f7768e")
+		case statusInfo:
+			color = lipgloss.Color("#e0af68")
+		default:
+			color = lipgloss.Color("#a9b1d6")
+		}
+		right = lipgloss.NewStyle().Foreground(color).Render(m.statusMessage + " ")
+	}
+
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	gap := max(width-leftWidth-rightWidth, 0)
+
+	return left + strings.Repeat(" ", gap) + right
 }

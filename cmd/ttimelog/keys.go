@@ -56,6 +56,7 @@ func (m *model) handleEditInput(val string) {
 	parts := strings.SplitN(val, ": ", 2)
 	if len(parts) < 2 {
 		m.statusMessage = "Invalid format, expected 'YYYY-MM-DD HH:MM +ZZZZ: description'"
+		m.statusKind = statusError
 		return
 	}
 
@@ -69,6 +70,7 @@ func (m *model) handleEditInput(val string) {
 	m.reloadEntries()
 	m.editingEntry = -1
 	m.statusMessage = ""
+	m.statusKind = statusNone
 	m.textInput.Reset()
 }
 
@@ -188,6 +190,7 @@ func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 		entry := m.entries[m.entryIndices[cursor]]
 		m.editingEntry = m.entryIndices[cursor]
 		m.statusMessage = "Editing entry..."
+		m.statusKind = statusInfo
 		m.textInput.SetValue(fmt.Sprintf("%s: %s", entry.EndTime.Format(timelog.TimeLayout), entry.Description))
 		m.textInput.Focus()
 		m.taskTable.Blur()
@@ -216,6 +219,7 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		if m.editingEntry >= 0 {
 			m.editingEntry = -1
 			m.statusMessage = ""
+			m.statusKind = statusNone
 			m.textInput.Reset()
 			return keyHandled, nil
 		}
@@ -235,6 +239,7 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		return keyHandled, nil
 	case "alt+s":
 		m.statusMessage = "Submitting..."
+		m.statusKind = statusInfo
 		entries := m.entries
 		appCfg := m.appConfig
 		cmd := func() tea.Msg {

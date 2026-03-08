@@ -8,6 +8,15 @@ const (
 	keyExit
 )
 
+type statusKind int
+
+const (
+	statusNone statusKind = iota
+	statusInfo
+	statusSuccess
+	statusError
+)
+
 type Focus int
 
 const (

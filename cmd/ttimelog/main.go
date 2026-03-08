@@ -44,6 +44,7 @@ type model struct {
 	editingEntry          int
 	reassigningEntry      int
 	statusMessage         string
+	statusKind            statusKind
 	searchInput           textinput.Model
 	recentProjects        []string // paths like "collabora:business-development:demo: "
 	recentCursor          int
@@ -54,7 +55,7 @@ type model struct {
 const (
 	HeaderHeight = 3
 	StatsHeight  = 5
-	FooterHeight = 2
+	FooterHeight = 3
 )
 
 type (
@@ -131,8 +132,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case submitResultMsg:
 		if msg.err != nil {
 			m.statusMessage = fmt.Sprintf("Submit failed: %s", msg.err)
+			m.statusKind = statusError
 		} else {
 			m.statusMessage = "Timesheet submitted"
+			m.statusKind = statusSuccess
 		}
 		return m, nil
 	case tea.KeyMsg:
