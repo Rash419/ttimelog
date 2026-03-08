@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rash419/ttimelog/internal/chrono"
 	"github.com/Rash419/ttimelog/internal/timelog"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -207,31 +208,39 @@ func (m *model) handleTableKeyMsg(msg tea.KeyMsg) keyResult {
 	return keyIgnored
 }
 
-func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
+func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
-		return keyExit
+		return keyExit, nil
 	case "esc":
 		if m.editingEntry >= 0 {
 			m.editingEntry = -1
 			m.statusMessage = ""
 			m.textInput.Reset()
-			return keyHandled
+			return keyHandled, nil
 		}
-		return keyIgnored
+		return keyIgnored, nil
 	case "enter":
 		if m.focus == focusFooter {
 			m.handleInput()
-			return keyHandled
+			return keyHandled, nil
 		}
-		return keyIgnored
+		return keyIgnored, nil
 	case "ctrl+p":
 		m.reassigningEntry = -1
 		m.showProjectOverlay = true
 		m.inRecents = len(m.recentProjects) > 0
 		m.recentCursor = 0
 		m.focus = focusProjectTree
-		return keyHandled
+		return keyHandled, nil
+	case "alt+s":
+		m.statusMessage = "Submitting..."
+		entries := m.entries
+		appCfg := m.appConfig
+		cmd := func() tea.Msg {
+			return submitResultMsg{err: chrono.SubmitTimesheet(entries, appCfg)}
+		}
+		return keyHandled, cmd
 	case "tab":
 		m.focus = (m.focus + 1) % 4
 		m.textInput.Blur()
@@ -241,7 +250,7 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		} else if m.focus == focusTable {
 			m.taskTable.Focus()
 		}
-		return keyHandled
+		return keyHandled, nil
 	case "shift+tab":
 		m.focus = (m.focus + 3) % 4
 		m.textInput.Blur()
@@ -251,12 +260,12 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) keyResult {
 		} else if m.focus == focusTable {
 			m.taskTable.Focus()
 		}
-		return keyHandled
+		return keyHandled, nil
 	}
 
 	if m.focus == focusTable {
-		return m.handleTableKeyMsg(msg)
+		return m.handleTableKeyMsg(msg), nil
 	}
 
-	return keyIgnored
+	return keyIgnored, nil
 }

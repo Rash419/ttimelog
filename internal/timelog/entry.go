@@ -238,6 +238,14 @@ func FormatDuration(diff time.Duration) string {
 	return fmt.Sprintf("%d h %d min", hours, mins)
 }
 
+// FormatDurationShort formats a time.Duration into "H:MM" format (e.g., "1:30" for 1h30m).
+func FormatDurationShort(d time.Duration) string {
+	d = d.Truncate(time.Minute)
+	hours := int(d / time.Hour)
+	mins := int((d - time.Duration(hours)*time.Hour) / time.Minute)
+	return fmt.Sprintf("%d:%02d", hours, mins)
+}
+
 func IsArrivedMessage(val string) bool {
 	return val == "**arrived" || val == "arrived**"
 }

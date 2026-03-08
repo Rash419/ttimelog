@@ -60,6 +60,7 @@ type AppConfig struct {
 	Gtimelog struct {
 		AuthHeader  string  `ini:"auth_header"`
 		TaskListURL string  `ini:"task_list_url"`
+		ReportToURL string  `ini:"report_to_url"`
 		Hours       float64 `ini:"hours"`
 	} `ini:"gtimelog"`
 	TimeLogDirPath string

@@ -48,6 +48,7 @@ type model struct {
 	recentProjects        []string // paths like "collabora:business-development:demo: "
 	recentCursor          int
 	inRecents             bool
+	appConfig             *config.AppConfig
 }
 
 const (
@@ -57,7 +58,8 @@ const (
 )
 
 type (
-	errMsg error
+	errMsg          error
+	submitResultMsg struct{ err error }
 )
 
 type shutdownCompleteMsg struct{}
@@ -107,6 +109,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		deleteTargetEntry:     -1,
 		reassigningEntry:      -1,
 		searchInput:           searchInput,
+		appConfig:             appConfig,
 	}
 }
 
@@ -125,18 +128,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.handleFileChangedMsg()
 	case watcher.FileErrorMsg:
 		// TODO: handle file watch error
-	case tea.KeyMsg:
-		var keyResult keyResult
-		if m.showDeleteConfirm {
-			keyResult = m.handleDeleteConfirmKeyMsg(msg)
-		} else if m.showProjectOverlay {
-			keyResult = m.handleProjectTreeKeyMsg(msg)
+	case submitResultMsg:
+		if msg.err != nil {
+			m.statusMessage = fmt.Sprintf("Submit failed: %s", msg.err)
 		} else {
-			keyResult = m.handleKeyMsg(msg)
+			m.statusMessage = "Timesheet submitted"
 		}
-		switch keyResult {
+		return m, nil
+	case tea.KeyMsg:
+		var kr keyResult
+		var cmd tea.Cmd
+		if m.showDeleteConfirm {
+			kr = m.handleDeleteConfirmKeyMsg(msg)
+		} else if m.showProjectOverlay {
+			kr = m.handleProjectTreeKeyMsg(msg)
+		} else {
+			kr, cmd = m.handleKeyMsg(msg)
+		}
+		switch kr {
 		case keyHandled:
-			return m, nil
+			return m, cmd
 		case keyExit:
 			m.cancel()
 			return m, func() tea.Msg {
