@@ -162,6 +162,55 @@ func TestDeleteEntryOutOfRange(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// --- Feature 5: Virtual Midnight Tests ---
+
+func TestVirtualDate(t *testing.T) {
+	vm := 2 * time.Hour // 02:00
+
+	// 1:30 AM → belongs to previous day
+	t130am := time.Date(2026, 3, 8, 1, 30, 0, 0, time.UTC)
+	vd := VirtualDate(t130am, vm)
+	assert.Equal(t, 7, vd.Day())
+
+	// 2:30 AM → belongs to same day
+	t230am := time.Date(2026, 3, 8, 2, 30, 0, 0, time.UTC)
+	vd = VirtualDate(t230am, vm)
+	assert.Equal(t, 8, vd.Day())
+
+	// 10:00 AM → belongs to same day
+	t10am := time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC)
+	vd = VirtualDate(t10am, vm)
+	assert.Equal(t, 8, vd.Day())
+}
+
+func TestVirtualDateDefaultMidnight(t *testing.T) {
+	vm := time.Duration(0) // 00:00 (disabled)
+
+	t130am := time.Date(2026, 3, 8, 1, 30, 0, 0, time.UTC)
+	vd := VirtualDate(t130am, vm)
+	assert.Equal(t, 8, vd.Day()) // same day when VM=0
+}
+
+func TestParseVirtualMidnight(t *testing.T) {
+	d, err := ParseVirtualMidnight("02:00")
+	assert.NoError(t, err)
+	assert.Equal(t, 2*time.Hour, d)
+
+	d, err = ParseVirtualMidnight("00:00")
+	assert.NoError(t, err)
+	assert.Equal(t, time.Duration(0), d)
+
+	d, err = ParseVirtualMidnight("")
+	assert.NoError(t, err)
+	assert.Equal(t, 2*time.Hour, d) // default
+
+	_, err = ParseVirtualMidnight("invalid")
+	assert.Error(t, err)
+
+	_, err = ParseVirtualMidnight("25:00")
+	assert.Error(t, err)
+}
+
 func createTempFile(t *testing.T, content string) string {
 	t.Helper()
 	tmpFile, err := os.CreateTemp(t.TempDir(), "ttimelog-*.txt")

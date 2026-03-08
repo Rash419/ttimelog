@@ -36,6 +36,40 @@ type Stats struct {
 
 const TimeLayout = "2006-01-02 15:04 -0700"
 
+// ParseVirtualMidnight parses a "HH:MM" string into a time.Duration from midnight.
+func ParseVirtualMidnight(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 2 * time.Hour, nil // default
+	}
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid virtual_midnight format: %q (expected HH:MM)", s)
+	}
+	var h, m int
+	if _, err := fmt.Sscanf(parts[0], "%d", &h); err != nil {
+		return 0, fmt.Errorf("invalid virtual_midnight hours: %w", err)
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &m); err != nil {
+		return 0, fmt.Errorf("invalid virtual_midnight minutes: %w", err)
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, fmt.Errorf("virtual_midnight out of range: %02d:%02d", h, m)
+	}
+	return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute, nil
+}
+
+// VirtualDate returns the "logical" date for a given time, respecting virtual midnight.
+// If t is before virtual midnight, it belongs to the previous day.
+func VirtualDate(t time.Time, virtualMidnight time.Duration) time.Time {
+	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	vm := midnight.Add(virtualMidnight)
+	if virtualMidnight > 0 && t.Before(vm) {
+		return midnight.AddDate(0, 0, -1)
+	}
+	return midnight
+}
+
 func NewEntry(endTime time.Time, description string, duration time.Duration) Entry {
 	today, currentWeek, currentMonth := GetEntryState(endTime)
 	return Entry{

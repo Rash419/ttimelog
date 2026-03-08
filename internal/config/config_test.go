@@ -80,3 +80,40 @@ hours = 7.5
 	assert.NoError(t, err)
 	assert.Equal(t, 7.5, appConfig.Gtimelog.Hours)
 }
+
+func TestLoadConfigDefaultVirtualMidnight(t *testing.T) {
+	testConfig := `
+[gtimelog]
+task_list_url = https://chronophage/rest-api/proxy/tasks
+auth_header = Token ABCDXYZ
+`
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "ttimelogrc")
+	err := os.WriteFile(tempFile, []byte(testConfig), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	appConfig, err := LoadConfig(tempDir)
+	assert.NoError(t, err)
+	assert.Equal(t, "02:00", appConfig.Gtimelog.VirtualMidnight)
+}
+
+func TestLoadConfigCustomVirtualMidnight(t *testing.T) {
+	testConfig := `
+[gtimelog]
+task_list_url = https://chronophage/rest-api/proxy/tasks
+auth_header = Token ABCDXYZ
+virtual_midnight = 04:00
+`
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "ttimelogrc")
+	err := os.WriteFile(tempFile, []byte(testConfig), 0o666)
+	if err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	appConfig, err := LoadConfig(tempDir)
+	assert.NoError(t, err)
+	assert.Equal(t, "04:00", appConfig.Gtimelog.VirtualMidnight)
+}
