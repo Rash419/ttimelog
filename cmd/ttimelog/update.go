@@ -17,6 +17,7 @@ func (m *model) reloadEntries() {
 	m.entries = entries
 	m.statsCollection = statsCollections
 	m.handledArrivedMessage = handledArrivedMessage
+	m.activityHistory = timelog.BuildActivityHistory(entries, 100, 90)
 
 	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
 	m.taskTable.SetRows(rows)
@@ -86,6 +87,7 @@ func (m *model) handleFileChangedMsg() {
 	m.entries = entries
 	m.statsCollection = statsCollections
 	m.handledArrivedMessage = handledArrivedMessage
+	m.activityHistory = timelog.BuildActivityHistory(entries, 100, 90)
 
 	rows, indices := getTableRows(m.entries, m.viewDate, m.virtualMidnight)
 	m.taskTable.SetRows(rows)

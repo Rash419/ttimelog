@@ -45,6 +45,9 @@ func (m *model) handleInput() {
 	m.scrollToBottom = true
 
 	timelog.UpdateStatsCollection(newEntry, &m.statsCollection)
+	m.activityHistory = timelog.BuildActivityHistory(m.entries, 100, 90)
+	m.historyActive = false
+	m.historyCursor = -1
 
 	m.textInput.Reset()
 }
@@ -223,9 +226,16 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 			m.textInput.Reset()
 			return keyHandled, nil
 		}
+		if m.historyActive {
+			m.historyActive = false
+			m.textInput.SetValue(m.historyInput)
+			return keyHandled, nil
+		}
 		return keyIgnored, nil
 	case "enter":
 		if m.focus == focusFooter {
+			m.historyActive = false
+			m.historyCursor = -1
 			m.handleInput()
 			return keyHandled, nil
 		}
@@ -247,6 +257,7 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		}
 		return keyHandled, cmd
 	case "tab":
+		m.historyActive = false
 		m.focus = (m.focus + 1) % 4
 		m.textInput.Blur()
 		m.taskTable.Blur()
@@ -257,6 +268,7 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 		}
 		return keyHandled, nil
 	case "shift+tab":
+		m.historyActive = false
 		m.focus = (m.focus + 3) % 4
 		m.textInput.Blur()
 		m.taskTable.Blur()
@@ -266,6 +278,48 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 			m.taskTable.Focus()
 		}
 		return keyHandled, nil
+	}
+
+	// Activity history when footer focused
+	if m.focus == focusFooter && m.editingEntry < 0 {
+		switch msg.String() {
+		case "up":
+			filtered := m.filteredHistory()
+			if len(filtered) == 0 {
+				return keyIgnored, nil
+			}
+			if !m.historyActive {
+				m.historyActive = true
+				m.historyInput = m.textInput.Value()
+				m.historyCursor = 0
+			} else if m.historyCursor < len(filtered)-1 {
+				m.historyCursor++
+			}
+			m.textInput.SetValue(filtered[m.historyCursor])
+			m.textInput.CursorEnd()
+			return keyHandled, nil
+		case "down":
+			if !m.historyActive {
+				return keyIgnored, nil
+			}
+			filtered := m.filteredHistory()
+			if m.historyCursor > 0 {
+				m.historyCursor--
+				m.textInput.SetValue(filtered[m.historyCursor])
+				m.textInput.CursorEnd()
+			} else {
+				m.historyActive = false
+				m.historyCursor = -1
+				m.textInput.SetValue(m.historyInput)
+				m.textInput.CursorEnd()
+			}
+			return keyHandled, nil
+		default:
+			if m.historyActive {
+				m.historyActive = false
+				m.historyCursor = -1
+			}
+		}
 	}
 
 	// Date navigation when header focused
@@ -305,4 +359,19 @@ func (m *model) handleKeyMsg(msg tea.KeyMsg) (keyResult, tea.Cmd) {
 	}
 
 	return keyIgnored, nil
+}
+
+func (m *model) filteredHistory() []string {
+	prefix := m.historyInput
+	if prefix == "" {
+		return m.activityHistory
+	}
+	var filtered []string
+	lowerPrefix := strings.ToLower(prefix)
+	for _, h := range m.activityHistory {
+		if strings.HasPrefix(strings.ToLower(h), lowerPrefix) {
+			filtered = append(filtered, h)
+		}
+	}
+	return filtered
 }

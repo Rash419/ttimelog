@@ -155,6 +155,51 @@ func StatsCollectionForDate(entries []Entry, date time.Time, virtualMidnight tim
 	}
 }
 
+// BuildActivityHistory returns unique activity descriptions sorted by frequency (most frequent first).
+// It only includes entries from the last `days` days and excludes arrived markers and slack.
+func BuildActivityHistory(entries []Entry, limit int, days int) []string {
+	cutoff := time.Now().AddDate(0, 0, -days)
+	freq := make(map[string]int)
+	for _, e := range entries {
+		if e.EndTime.Before(cutoff) {
+			continue
+		}
+		if IsArrivedMessage(e.Description) {
+			continue
+		}
+		if strings.Contains(e.Description, "**") {
+			continue
+		}
+		freq[e.Description]++
+	}
+
+	// Sort by frequency descending
+	type kv struct {
+		Key   string
+		Value int
+	}
+	var sorted []kv
+	for k, v := range freq {
+		sorted = append(sorted, kv{k, v})
+	}
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j].Value > sorted[i].Value {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	result := make([]string, 0, limit)
+	for i, kv := range sorted {
+		if i >= limit {
+			break
+		}
+		result = append(result, kv.Key)
+	}
+	return result
+}
+
 func NewEntry(endTime time.Time, description string, duration time.Duration) Entry {
 	today, currentWeek, currentMonth := GetEntryState(endTime)
 	return Entry{

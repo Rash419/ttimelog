@@ -55,6 +55,12 @@ type model struct {
 	// Date navigation
 	viewDate        time.Time
 	virtualMidnight time.Duration
+
+	// Activity history
+	activityHistory []string
+	historyCursor   int
+	historyActive   bool
+	historyInput    string // original input before history browsing
 }
 
 const (
@@ -88,6 +94,7 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 	}
 
 	taskTable, entryIndices := createBodyContent(0, 0, entries, time.Now(), vm)
+	activityHistory := timelog.BuildActivityHistory(entries, 100, 90)
 
 	projectListFile := filepath.Join(appConfig.TimeLogDirPath, config.ProjectListFile)
 	rootNode, err := chrono.ParseProjectList(projectListFile)
@@ -124,6 +131,8 @@ func initialModel(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitG
 		appConfig:             appConfig,
 		viewDate:              time.Now(),
 		virtualMidnight:       vm,
+		activityHistory:       activityHistory,
+		historyCursor:         -1,
 	}
 }
 

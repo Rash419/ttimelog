@@ -288,6 +288,57 @@ func TestFilterEntriesForDateWithVirtualMidnight(t *testing.T) {
 	assert.Equal(t, "after VM work", filtered[0].Description)
 }
 
+// --- Feature 4: Activity History Tests ---
+
+func TestBuildActivityHistory(t *testing.T) {
+	now := time.Now()
+	entries := []Entry{
+		{EndTime: now, Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task B", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task C", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task A", Duration: 1 * time.Hour},
+	}
+	history := BuildActivityHistory(entries, 10, 90)
+	assert.Len(t, history, 3)
+	assert.Equal(t, "task A", history[0]) // most frequent
+}
+
+func TestBuildActivityHistoryExcludesArrived(t *testing.T) {
+	now := time.Now()
+	entries := []Entry{
+		{EndTime: now, Description: "**arrived", Duration: 0},
+		{EndTime: now, Description: "arrived**", Duration: 0},
+		{EndTime: now, Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "**slack break", Duration: 30 * time.Minute},
+	}
+	history := BuildActivityHistory(entries, 10, 90)
+	assert.Len(t, history, 1)
+	assert.Equal(t, "task A", history[0])
+}
+
+func TestBuildActivityHistoryLimit(t *testing.T) {
+	now := time.Now()
+	entries := []Entry{
+		{EndTime: now, Description: "task A", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task B", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "task C", Duration: 1 * time.Hour},
+	}
+	history := BuildActivityHistory(entries, 2, 90)
+	assert.Len(t, history, 2)
+}
+
+func TestBuildActivityHistoryRecent(t *testing.T) {
+	now := time.Now()
+	entries := []Entry{
+		{EndTime: now.AddDate(0, 0, -100), Description: "old task", Duration: 1 * time.Hour},
+		{EndTime: now, Description: "recent task", Duration: 1 * time.Hour},
+	}
+	history := BuildActivityHistory(entries, 10, 90)
+	assert.Len(t, history, 1)
+	assert.Equal(t, "recent task", history[0])
+}
+
 func createTempFile(t *testing.T, content string) string {
 	t.Helper()
 	tmpFile, err := os.CreateTemp(t.TempDir(), "ttimelog-*.txt")
